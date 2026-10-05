@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * rove design tokens.
+ * Starting palette from the brief, with text/button colors adjusted for
+ * WCAG AA contrast:
+ *   teal text  #007480 (5.5:1 on white; #008C99 is kept for fills/rings)
+ *   coral btn  #CC4533 (4.8:1 with white text; #FF705F is decorative only)
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-dm-sans);
+  --font-heading: var(--font-fraunces);
+  --font-serif: var(--font-fraunces);
+
+  --color-surface: var(--surface);
+  --color-ink: var(--foreground);
+  --color-teal: var(--teal);
+  --color-teal-ink: var(--teal-ink);
+  --color-teal-soft: var(--teal-soft);
+  --color-coral: var(--coral);
+  --color-coral-hover: var(--coral-hover);
+  --color-coral-bright: var(--coral-bright);
+  --color-sun: var(--sun);
+  --color-lavender: var(--lavender);
+  --color-lavender-ink: var(--lavender-ink);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+}
+
+:root {
+  --background: #fffcf8;
+  --surface: #ffffff;
+  --foreground: #102f40;
+  --teal: #008c99;
+  --teal-ink: #007480;
+  --teal-soft: #e3f4f5;
+  --coral: #cc4533;
+  --coral-hover: #b93a2b;
+  --coral-bright: #ff705f;
+  --sun: #fff3ca;
+  --lavender: #eee8ff;
+  --lavender-ink: #5b4a9e;
+
+  --card: #ffffff;
+  --card-foreground: #102f40;
+  --popover: #ffffff;
+  --popover-foreground: #102f40;
+  --primary: #cc4533;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f6f7;
+  --secondary-foreground: #102f40;
+  --muted: #f3f6f7;
+  --muted-foreground: #5d6d79;
+  --accent: #e3f4f5;
+  --accent-foreground: #102f40;
+  --destructive: #b42318;
+  --border: #e6ebed;
+  --input: #d9e1e4;
+  --ring: #008c99;
+  --radius: 12px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: var(--font-fraunces);
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+  .eyebrow {
+    @apply text-[0.6875rem] font-semibold tracking-[0.16em] uppercase;
+  }
+  .card-surface {
+    @apply rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(16,47,64,0.04),0_8px_24px_-12px_rgba(16,47,64,0.08)];
+  }
+  .focus-ring {
+    @apply outline-none focus-visible:ring-3 focus-visible:ring-teal/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
