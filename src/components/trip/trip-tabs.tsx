@@ -29,7 +29,7 @@ export function TripTabs({ tripId }: { tripId: string }) {
                 <span
                   aria-disabled="true"
                   title={`${label} is coming soon`}
-                  className="flex min-h-12 cursor-not-allowed items-center gap-2 px-3 text-[0.9375rem] font-medium text-[#8a979f] select-none"
+                  className="flex min-h-12 cursor-not-allowed items-center gap-2 px-3 text-[0.9375rem] font-medium text-[#8e9480] select-none"
                 >
                   <Icon className="size-[18px]" aria-hidden="true" />
                   {label}
@@ -49,8 +49,8 @@ export function TripTabs({ tripId }: { tripId: string }) {
                 className={cn(
                   "focus-ring flex min-h-12 items-center gap-2 rounded-t-lg border-b-[3px] px-3 text-[0.9375rem] font-medium transition-colors",
                   active
-                    ? "border-teal text-teal-ink"
-                    : "border-transparent text-ink hover:border-border hover:text-teal-ink",
+                    ? "border-moss text-moss-ink"
+                    : "border-transparent text-ink hover:border-border hover:text-moss-ink",
                 )}
               >
                 <Icon className="size-[18px]" aria-hidden="true" />

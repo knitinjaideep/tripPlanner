@@ -26,7 +26,8 @@ function check(name: string, fn: () => void) {
 
 const place = (over: Partial<PlaceWithVisits>): PlaceWithVisits => ({
   id: over.name ?? "id", trip_id: "t", owner_id: "o", name: "Place", kind: "place", category: "other", priority: "maybe",
-  address: null, maps_url: null, website_url: null, planning_notes: null, created_at: "", updated_at: "",
+  address: null, maps_url: null, website_url: null, planning_notes: null, is_favorite: false, source_key: null,
+  recommendation: null, created_at: "", updated_at: "",
   visit_count: 0, planned_count: 0, completed_count: 0, visited: false, rating_avg: null, rated_count: 0,
   next_planned_date: null, last_completed_date: null, ...over,
 });
@@ -42,11 +43,12 @@ const names = (q: Record<string, string>) => filterPlaces(places, parseExploreFi
 
 console.log("Filters");
 check("URL filters parse safely; unknown values fall back to all", () => {
-  assert.deepEqual(parseExploreFilters({}), { kind: "all", q: "", priority: "all", status: "all" });
+  assert.deepEqual(parseExploreFilters({}), { kind: "all", q: "", priority: "all", status: "all", flags: [] });
   assert.deepEqual(parseExploreFilters({ kind: "food", q: "  cafe ", priority: "must_do", status: "visited" }), {
-    kind: "food", q: "cafe", priority: "must_do", status: "visited",
+    kind: "food", q: "cafe", priority: "must_do", status: "visited", flags: [],
   });
-  assert.deepEqual(parseExploreFilters({ kind: "x", priority: ["must_do"], status: "<script>" }), { kind: "all", q: "", priority: "all", status: "all" });
+  assert.deepEqual(parseExploreFilters({ kind: "x", priority: ["must_do"], status: "<script>" }), { kind: "all", q: "", priority: "all", status: "all", flags: [] });
+  assert.deepEqual(parseExploreFilters({ only: "veg,bogus,near,veg" }).flags, ["near", "veg"]);
   assert.equal(parseExploreFilters({ q: "a".repeat(500) }).q.length, 80);
 });
 check("hrefs keep only non-default filters and round-trip", () => {
@@ -54,7 +56,10 @@ check("hrefs keep only non-default filters and round-trip", () => {
   const href = exploreHref("t", { kind: "food", q: "café & bar", priority: "all", status: "scheduled" }, "p1");
   assert.equal(href, "/trips/t/explore?kind=food&q=caf%C3%A9+%26+bar&status=scheduled&place=p1");
   const back = parseExploreFilters(Object.fromEntries(new URLSearchParams(href.split("?")[1])));
-  assert.deepEqual(back, { kind: "food", q: "café & bar", priority: "all", status: "scheduled" });
+  assert.deepEqual(back, { kind: "food", q: "café & bar", priority: "all", status: "scheduled", flags: [] });
+  const flagged = exploreHref("t", { kind: "spa", flags: ["solo", "favorites"] });
+  assert.equal(flagged, "/trips/t/explore?kind=spa&only=favorites%2Csolo");
+  assert.deepEqual(parseExploreFilters(Object.fromEntries(new URLSearchParams(flagged.split("?")[1]))).flags, ["favorites", "solo"]);
 });
 check("kind, priority, status and name search combine", () => {
   assert.deepEqual(names({ kind: "food" }), ["Zeerovers", "Café Rembrandt"]);
@@ -79,7 +84,7 @@ check("similar names are hinted (accents, case, 'the', containment), never the p
   assert.deepEqual(similarPlaces("Natural Pool", places), []);
 });
 check("maps: exact saved link vs a generated search (name + address)", () => {
-  assert.deepEqual(mapsLink({ name: "X", address: null, maps_url: "https://maps.app.goo.gl/abc" }), { url: "https://maps.app.goo.gl/abc", exact: true });
+  assert.deepEqual(mapsLink({ name: "X", address: null, maps_url: "https://maps.app.goo.gl/abc" }), { url: "https://maps.app.goo.gl/abc", exact: true, query: null });
   const search = mapsLink({ name: "Zeerovers & Co", address: "Savaneta 270", maps_url: null });
   assert.equal(search.exact, false);
   assert.equal(search.url, "https://www.google.com/maps/search/?api=1&query=Zeerovers%20%26%20Co%2C%20Savaneta%20270");

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, Camera, Heart, PenLine, Sparkles } from "lucide-react";
 import type { TripDayOption } from "@/components/itinerary/types";
 import { Stars } from "@/components/itinerary/star-rating";
+import { MascotImage } from "@/components/mascot";
 import { getCover } from "@/lib/covers";
 import { daysUntil, formatDateRange, formatDayDate, formatShortDay, tripLengthDays } from "@/lib/dates";
 import { itineraryHref } from "@/lib/itinerary-format";
@@ -27,11 +28,11 @@ import { VisitCard } from "./visit-card";
 export type JournalFilter = "all" | "favorites";
 
 const primaryButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(204,69,51,0.7)] transition-colors hover:bg-coral-hover";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(62,122,58,0.55)] transition-colors hover:bg-moss-hover";
 const outlineButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-teal-ink px-5 text-[0.9375rem] font-semibold text-teal-ink transition-colors hover:bg-teal-soft";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-moss-ink px-5 text-[0.9375rem] font-semibold text-moss-ink transition-colors hover:bg-moss-soft";
 const linkButton =
-  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60";
+  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60";
 
 /**
  * The trip as a journal. Completed itinerary rows are the per-visit memories
@@ -169,7 +170,7 @@ function Masthead({
 
   return (
     <section className="card-surface grid overflow-hidden md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="relative h-40 bg-[#0b2a3a] sm:h-48 md:h-auto md:min-h-60">
+      <div className="relative h-40 bg-[#183a2f] sm:h-48 md:h-auto md:min-h-60">
         <Image
           src={cover.image}
           alt=""
@@ -179,12 +180,12 @@ function Masthead({
           style={{ objectPosition: cover.position }}
           priority
         />
-        <span className="absolute bottom-2 left-2 rounded-full bg-[#08263a]/70 px-2 py-0.5 text-[0.6875rem] text-white">
+        <span className="absolute bottom-2 left-2 rounded-full bg-[#10251e]/70 px-2 py-0.5 text-[0.6875rem] text-white">
           Illustrative photo
         </span>
       </div>
       <div className="flex flex-col justify-center gap-3 p-6 sm:p-8">
-        <p className="eyebrow text-coral">Trip journal</p>
+        <p className="eyebrow text-gold-ink">Trip journal</p>
         <p className="font-display text-[2rem] leading-[1.1] font-semibold break-words text-ink sm:text-[2.5rem]">
           {trip.destination}
         </p>
@@ -201,7 +202,7 @@ function Masthead({
               </span>
             ) : null}
             {memory.would_return ? (
-              <span className="rounded-full bg-teal-soft px-3 py-1 text-sm font-medium text-teal-ink">
+              <span className="rounded-full bg-moss-soft px-3 py-1 text-sm font-medium text-moss-ink">
                 Would go back: {LABELS.wouldReturn[memory.would_return]}
               </span>
             ) : null}
@@ -223,11 +224,11 @@ function Stats({ stats }: { stats: { completed: number; places: number; food: nu
   return (
     <dl className="grid grid-cols-3 gap-2 sm:gap-4">
       {items.map((s) => (
-        <div key={s.label} className="rounded-2xl bg-sun px-3 py-3 sm:px-5 sm:py-4">
+        <div key={s.label} className="rounded-2xl bg-gold-soft px-3 py-3 sm:px-5 sm:py-4">
           <dt className="sr-only">{s.label}</dt>
           <dd>
             <span className="font-display block text-2xl font-semibold text-ink sm:text-3xl">{s.value}</span>
-            <span className="block text-xs leading-snug text-[#5a4a10] sm:text-sm">{s.label}</span>
+            <span className="block text-xs leading-snug text-gold-ink sm:text-sm">{s.label}</span>
           </dd>
         </div>
       ))}
@@ -316,14 +317,14 @@ function ReflectionCard({
       {memory?.favorite_moment ? (
         <div className="mt-6">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <Sparkles className="size-4 text-coral" aria-hidden="true" /> Favorite moment
+            <Sparkles className="size-4 text-gold-deep" aria-hidden="true" /> Favorite moment
           </h4>
           <p className="mt-1.5 max-w-prose leading-relaxed whitespace-pre-line text-muted-foreground">{memory.favorite_moment}</p>
         </div>
       ) : null}
       {memory?.lessons_for_next_time ? (
-        <div className="mt-6 rounded-xl bg-teal-soft/60 p-4">
-          <h4 className="text-sm font-semibold text-teal-ink">Lessons for next time</h4>
+        <div className="mt-6 rounded-xl bg-moss-soft/60 p-4">
+          <h4 className="text-sm font-semibold text-moss-ink">Lessons for next time</h4>
           <p className="mt-1.5 max-w-prose leading-relaxed whitespace-pre-line text-ink">{memory.lessons_for_next_time}</p>
         </div>
       ) : phase === "after" ? (
@@ -351,7 +352,7 @@ function FavoritesStrip({ tripId, favorites }: { tripId: string; favorites: Itin
           <li key={v.id}>
             <a
               href={`#visit-card-${v.id}`}
-              className="focus-ring flex h-full items-start gap-3 rounded-2xl border border-[#f5c6bd] bg-[#fffaf8] p-4 hover:border-coral/50"
+              className="focus-ring flex h-full items-start gap-3 rounded-2xl border border-gold/70 bg-[#fffbef] p-4 hover:border-gold"
             >
               <Heart className="mt-1 size-4 shrink-0 fill-coral text-coral" aria-hidden="true" />
               <span className="min-w-0">
@@ -447,7 +448,7 @@ function Journal({
           {days.map((day) => (
             <li key={day.date ?? "undated"} className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)] md:gap-6">
               <h4 className="md:pt-4">
-                <span className="eyebrow block text-coral">
+                <span className="eyebrow block text-gold-ink">
                   {day.dayNumber ? `Day ${day.dayNumber}` : day.date ? "Outside trip dates" : "No date"}
                 </span>
                 {day.date ? (
@@ -499,9 +500,12 @@ function JournalEmpty({
           };
   return (
     <div className="mt-6 flex flex-col items-start gap-4 rounded-2xl border border-dashed border-input bg-surface/60 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-      <div>
-        <p className="font-display text-xl font-semibold text-ink">{copy.title}</p>
-        <p className="mt-1 max-w-prose text-[0.9375rem] text-muted-foreground">{copy.body}</p>
+      <div className="flex items-center gap-4">
+        <MascotImage size="sm" decorative />
+        <div>
+          <p className="font-display text-xl font-semibold text-ink">{copy.title}</p>
+          <p className="mt-1 max-w-prose text-[0.9375rem] text-muted-foreground">{copy.body}</p>
+        </div>
       </div>
       {favoritesOnly ? null : (
         <Link href={firstDayHref} className={cn(outlineButton, "shrink-0")}>

@@ -1,4 +1,4 @@
-# Deploying rove to Vercel
+# Deploying Atlas to Vercel
 
 Target: **https://travel.nitinkotcherlakota.com** (Vercel project, Neon
 `production` branch, Neon Auth with your own Google OAuth client).
@@ -100,11 +100,11 @@ Auth / Configuration):
 2. **OAuth providers → Google:** switch from shared credentials to your own
    Client ID and Client secret (from step 2). Enter them only here, never in
    Vercel or the repo.
-3. **Application name:** `rove`.
+3. **Application name:** `atlas`.
 4. **Allow localhost:** turn this **off** on `production` once you do local
    development on a separate branch (1c). While it is on, a local dev server
    can complete sign-in against production users.
-5. Email/SMTP and email verification: rove offers Google sign-in only, so
+5. Email/SMTP and email verification: Atlas offers Google sign-in only, so
    the custom-SMTP item in Neon's checklist doesn't apply yet.
 6. Copy the **Auth URL**. It becomes `NEON_AUTH_BASE_URL` in Vercel.
 
@@ -120,20 +120,20 @@ branch has its own users, so you'll sign in again there.
 
 ## 2. Google Cloud: your own OAuth client
 
-Google Cloud Console → a project for rove:
+Google Cloud Console → a project for Atlas:
 
-1. **Google Auth Platform → Branding:** app name `rove`, your support email,
+1. **Google Auth Platform → Branding:** app name `atlas`, your support email,
    app home page `https://travel.nitinkotcherlakota.com`, authorized domain
    `nitinkotcherlakota.com`, developer contact email. Add privacy-policy and
    terms links if you publish the app.
 2. **Data access (scopes):** `openid`, `.../auth/userinfo.email`,
-   `.../auth/userinfo.profile` only. rove never asks for Drive or Gmail.
-3. **Clients → Create client → Web application**, name `rove production`:
+   `.../auth/userinfo.profile` only. Atlas never asks for Drive or Gmail.
+3. **Clients → Create client → Web application**, name `atlas production`:
    - **Authorized JavaScript origins:** `https://travel.nitinkotcherlakota.com`
    - **Authorized redirect URIs:** `<NEON_AUTH_BASE_URL>/callback/google`,
      using the **production** branch's Auth URL. For example:
      `https://ep-….neonauth.us-east-2.aws.neon.tech/neondb/auth/callback/google`.
-     This callback belongs to Neon Auth, not to rove.
+     This callback belongs to Neon Auth, not to Atlas.
 4. Copy the Client ID and secret into Neon (step 1b-2).
 5. **Audience:** while the app is in *Testing*, only listed **test users**
    can sign in, so add your Google account(s). To let anyone sign in,
@@ -205,7 +205,7 @@ Deployment Protection on for previews.
    - On Cloudflare, set the record to **DNS only** (grey cloud) so Vercel can
      issue the certificate and see the real host.
    - If the apex has **CAA** records, make sure one allows `letsencrypt.org`.
-   - Don't change the apex or other subdomains. rove sets no cookies on them
+   - Don't change the apex or other subdomains. Atlas sets no cookies on them
      (see section 6).
 3. Wait until Vercel shows the domain as **Valid Configuration** with a
    certificate issued.
@@ -222,7 +222,7 @@ sign-in only works on the trusted custom domain. Share only
    Git repo, or click **Deploy**.
 2. Signed out, open `https://travel.nitinkotcherlakota.com/trips/x/itinerary?day=2026-01-01`.
    Expect a redirect to `/login?next=…`.
-3. **Continue with Google.** The consent screen says *rove*, not Neon. You
+3. **Continue with Google.** The consent screen says *Atlas*, not Neon. You
    land back on the requested page.
 4. DevTools → Application → Cookies → `travel.nitinkotcherlakota.com`:
    the `__Secure-neon-auth.*` cookies are `Secure`, `HttpOnly`,
@@ -256,7 +256,7 @@ point.
   credentials, app name, localhost off) are dashboard settings, covered in
   step 1b.
 - **Cookies:** the SDK always sets the `__Secure-` prefix, `Secure`,
-  `HttpOnly` and `SameSite=Lax`. rove passes no `cookies.domain`, so the
+  `HttpOnly` and `SameSite=Lax`. Atlas passes no `cookies.domain`, so the
   cookies are **host-only** for `travel.nitinkotcherlakota.com` and are never
   sent to sibling subdomains or the apex. Sign-out clears them with the same
   attributes. The non-sensitive `rove-tz` preference cookie is host-only

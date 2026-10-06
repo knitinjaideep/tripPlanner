@@ -9,7 +9,7 @@ export type PlaceKind = (typeof PLACE_KINDS)[number];
 
 /** Categories are validated per kind ("museum" is not a kind of food). */
 export const PLACE_CATEGORIES = {
-  place: ["sight", "museum", "nature", "beach", "park", "shopping", "nightlife", "experience", "other"],
+  place: ["sight", "museum", "nature", "beach", "park", "shopping", "nightlife", "experience", "spa", "other"],
   food: ["restaurant", "cafe", "bar", "bakery", "dessert", "market", "other"],
 } as const satisfies Record<PlaceKind, readonly string[]>;
 export type PlaceCategory = (typeof PLACE_CATEGORIES)[PlaceKind][number];
@@ -46,6 +46,7 @@ export const LABELS = {
     shopping: "Shopping",
     nightlife: "Nightlife",
     experience: "Experience",
+    spa: "Spa",
     restaurant: "Restaurant",
     cafe: "Café",
     bar: "Bar",

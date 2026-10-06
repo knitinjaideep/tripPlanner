@@ -18,15 +18,15 @@ import { DocumentRow } from "./document-row";
 import { AddBookingButton, AddDocumentButton, ViewBookingButton } from "./trip-workspace";
 
 const linkButton =
-  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 -mr-2 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60";
+  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 -mr-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60";
 
 const outlineButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-teal-ink px-5 text-[0.9375rem] font-semibold text-teal-ink transition-colors hover:bg-teal-soft";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-moss-ink px-5 text-[0.9375rem] font-semibold text-moss-ink transition-colors hover:bg-moss-soft";
 
 function CardEyebrow({ icon: Icon, children }: { icon: typeof Plane; children: React.ReactNode }) {
   return (
     <p className="eyebrow flex items-center gap-2 text-ink">
-      <Icon className="size-4 text-teal" aria-hidden="true" />
+      <Icon className="size-4 text-moss" aria-hidden="true" />
       {children}
     </p>
   );
@@ -122,10 +122,10 @@ export function FlightCard({ trip, today, className }: { trip: TripWithDetails; 
           <div className="min-w-0">
             <Airport value={flight.origin} align="left" />
           </div>
-          <div className="flex items-center gap-2 pt-4 text-teal-ink" aria-hidden="true">
-            <span className="hidden w-10 border-t-2 border-dotted border-[#b7c4c9] sm:block lg:w-6 xl:w-12" />
+          <div className="flex items-center gap-2 pt-4 text-moss-ink" aria-hidden="true">
+            <span className="hidden w-10 border-t-2 border-dotted border-input sm:block lg:w-6 xl:w-12" />
             <Plane className="size-6" />
-            <span className="hidden w-10 border-t-2 border-dotted border-[#b7c4c9] sm:block lg:w-6 xl:w-12" />
+            <span className="hidden w-10 border-t-2 border-dotted border-input sm:block lg:w-6 xl:w-12" />
           </div>
           <div className="min-w-0">
             <Airport value={flight.destination} align="right" />
@@ -166,9 +166,9 @@ export function FlightCard({ trip, today, className }: { trip: TripWithDetails; 
           </p>
         </div>
         {flight.confirmation_code ? (
-          <div className="flex items-center gap-1 rounded-xl bg-sun py-1 pr-1 pl-3.5">
+          <div className="flex items-center gap-1 rounded-xl bg-gold-soft py-1 pr-1 pl-3.5">
             <div>
-              <p className="text-[0.6875rem] font-semibold tracking-wider text-[#6b5200] uppercase">Confirmation</p>
+              <p className="text-[0.6875rem] font-semibold tracking-wider text-gold-ink uppercase">Confirmation</p>
               <p className="font-mono text-[0.9375rem] font-semibold tracking-wider text-ink">{flight.confirmation_code}</p>
             </div>
             <CopyButton value={flight.confirmation_code} label="Confirmation number" />
@@ -193,7 +193,7 @@ export function StayCard({ trip, today, className }: { trip: TripWithDetails; to
 
   if (!stay) {
     return (
-      <article className={cn("card-surface flex flex-col bg-[#f2f8f8] p-6 md:col-span-1 lg:col-span-4", className)}>
+      <article className={cn("card-surface flex flex-col bg-[#f5f9ee] p-6 md:col-span-1 lg:col-span-4", className)}>
         <CardEyebrow icon={BedDouble}>Accommodation</CardEyebrow>
         <div className="flex flex-1 flex-col items-start justify-center gap-3 py-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Where are you staying?</h2>
@@ -213,18 +213,18 @@ export function StayCard({ trip, today, className }: { trip: TripWithDetails; to
   const sub = [nights ? (nights === 1 ? "1 night" : `${nights} nights`) : null, stay.location].filter(Boolean).join(" · ");
 
   return (
-    <article className={cn("group relative isolate flex min-h-[19rem] flex-col justify-between overflow-hidden rounded-2xl bg-[#0b2a3a] p-5 text-white md:col-span-1 lg:col-span-4", className)}>
+    <article className={cn("group relative isolate flex min-h-[19rem] flex-col justify-between overflow-hidden rounded-2xl bg-[#183a2f] p-5 text-white md:col-span-1 lg:col-span-4", className)}>
       <Image src={cover.image} alt="" fill sizes="(min-width: 1024px) 420px, (min-width: 768px) 50vw, 100vw" className="-z-10 object-cover" style={{ objectPosition: cover.position }} />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#08263a]/85 via-[#08263a]/20 to-[#08263a]/10" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#10251e]/85 via-[#10251e]/20 to-[#10251e]/10" />
 
       <div className="flex items-start justify-between gap-3">
         <p className="eyebrow inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-ink">
-          <BedDouble className="size-4 text-teal-ink" aria-hidden="true" />
+          <BedDouble className="size-4 text-moss-ink" aria-hidden="true" />
           Stay{stays.length > 1 ? ` · ${stays.length}` : ""}
         </p>
         <ViewBookingButton
           bookingId={stay.id}
-          className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/90 px-3.5 text-sm font-semibold text-teal-ink hover:bg-white"
+          className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/90 px-3.5 text-sm font-semibold text-moss-ink hover:bg-white"
         >
           View stay <ArrowRight className="size-4" aria-hidden="true" />
         </ViewBookingButton>
@@ -256,8 +256,8 @@ export function GlanceCard({ trip, className }: { trip: TripWithDetails; classNa
     bookings === 0 ? "Let’s gather the details." : missingCodes > 0 ? "Nearly organized." : "All booked and noted.";
 
   return (
-    <article className={cn("flex flex-col rounded-2xl bg-sun p-6 md:col-span-2 lg:col-span-3", className)}>
-      <p className="eyebrow text-[#6b5200]">At a glance</p>
+    <article className={cn("flex flex-col rounded-2xl bg-gold-soft p-6 md:col-span-2 lg:col-span-3", className)}>
+      <p className="eyebrow text-gold-ink">At a glance</p>
       <h2 className="font-display mt-3 text-[1.75rem] leading-tight font-semibold text-ink">{headline}</h2>
       <dl className="mt-5 grid grid-cols-3 gap-2 md:max-w-md lg:max-w-none">
         {[
@@ -269,18 +269,18 @@ export function GlanceCard({ trip, className }: { trip: TripWithDetails; classNa
             <dt className="sr-only">{s.label}</dt>
             <dd>
               <span className="block text-2xl font-semibold text-ink">{s.value}</span>
-              <span className="text-xs text-[#5a4a10]">{s.label}</span>
+              <span className="text-xs text-gold-ink">{s.label}</span>
             </dd>
           </div>
         ))}
       </dl>
       {bookings > 0 && missingCodes > 0 ? (
-        <p className="mt-4 text-sm text-[#5a4a10]">
+        <p className="mt-4 text-sm text-gold-ink">
           {missingCodes === 1 ? "1 booking is" : `${missingCodes} bookings are`} missing a confirmation number.
         </p>
       ) : null}
       <div className="mt-auto pt-6">
-        <AddBookingButton className="focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(204,69,51,0.7)] transition-colors hover:bg-coral-hover">
+        <AddBookingButton className="focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(62,122,58,0.55)] transition-colors hover:bg-moss-hover">
           <Plus className="size-4" aria-hidden="true" /> Add a booking
         </AddBookingButton>
       </div>
@@ -358,9 +358,9 @@ export function DayPlanCard({
                       ) : (
                         <span className="font-normal text-muted-foreground">Flexible</span>
                       )}
-                      {done ? <span className="ml-2 text-xs font-semibold text-teal-ink">Done</span> : null}
+                      {done ? <span className="ml-2 text-xs font-semibold text-moss-ink">Done</span> : null}
                     </span>
-                    <span className="block truncate font-semibold text-ink group-hover:text-teal-ink">
+                    <span className="block truncate font-semibold text-ink group-hover:text-moss-ink">
                       {label ? <span className="font-medium text-muted-foreground">{label} · </span> : null}
                       {agendaTitle(e)}
                     </span>
@@ -381,7 +381,7 @@ export function DayPlanCard({
 }
 
 /* ------------------------------------------------------------------ */
-/* Travel documents — pale lavender                                    */
+/* Travel documents — warm stone                                       */
 /* ------------------------------------------------------------------ */
 
 export function DocumentsCard({ trip, limit = 4, className }: { trip: TripWithDetails; limit?: number; className?: string }) {
@@ -390,17 +390,17 @@ export function DocumentsCard({ trip, limit = 4, className }: { trip: TripWithDe
   const more = trip.documents.length - docs.length;
 
   return (
-    <article className={cn("rounded-2xl bg-lavender p-5 sm:p-6 md:col-span-2 lg:col-span-4", className)}>
+    <article className={cn("rounded-2xl bg-surface-warm p-5 sm:p-6 md:col-span-2 lg:col-span-4", className)}>
       <div className="flex items-center justify-between gap-3">
-        <p className="eyebrow flex items-center gap-2 text-lavender-ink">
+        <p className="eyebrow flex items-center gap-2 text-earth-ink">
           <FileText className="size-4" aria-hidden="true" /> Travel documents
         </p>
-        <AddDocumentButton className="focus-ring -mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-lavender-ink hover:bg-white/60">
+        <AddDocumentButton className="focus-ring -mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-earth-ink hover:bg-white/60">
           <Plus className="size-4" aria-hidden="true" /> Add link
         </AddDocumentButton>
       </div>
       {docs.length === 0 ? (
-        <div className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-[#4f4a63]">
+        <div className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-earth-ink">
           Link your Google Drive folder, passports, tickets and confirmations so they’re one tap away.
         </div>
       ) : (
@@ -413,7 +413,7 @@ export function DocumentsCard({ trip, limit = 4, className }: { trip: TripWithDe
       {more > 0 ? (
         <Link
           href={`/trips/${trip.id}/bookings#documents`}
-          className="focus-ring mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-lavender-ink"
+          className="focus-ring mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-earth-ink"
         >
           {more} more <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
@@ -449,7 +449,7 @@ export function PackingCard({
     <article className={cn("card-surface relative p-6 md:col-span-2", wide ? "lg:col-span-12" : "lg:col-span-4", className)}>
       <div className="flex items-center justify-between gap-3">
         <CardEyebrow icon={Luggage}>Packing</CardEyebrow>
-        {p.total > 0 ? <ArrowRight className="size-4 text-teal-ink" aria-hidden="true" /> : null}
+        {p.total > 0 ? <ArrowRight className="size-4 text-moss-ink" aria-hidden="true" /> : null}
       </div>
       {p.total === 0 ? (
         <div className={cn("mt-4 flex flex-col items-start gap-4", wide && "sm:flex-row sm:items-center sm:justify-between")}>
@@ -467,7 +467,7 @@ export function PackingCard({
               {p.remaining === 0 ? "All packed" : `${p.packed} of ${p.total} packed`}
             </p>
             <span className="mt-3 block h-2 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
-              <span className="block h-full rounded-full bg-teal-ink" style={{ width: `${p.percent}%` }} />
+              <span className="block h-full rounded-full bg-moss-ink" style={{ width: `${p.percent}%` }} />
             </span>
             <p className="mt-2 text-sm text-muted-foreground">
               {p.percent}%{p.remaining ? ` · ${p.remaining} still to pack` : " · every item checked off"}
@@ -513,7 +513,7 @@ export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
             {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true, b.start_time_zone)?.split(" · ")[1]}` : ""}
           </span>
           <span className="flex min-w-0 items-center gap-2">
-            <span className={cn("truncate font-semibold text-ink group-hover:text-teal-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>
+            <span className={cn("truncate font-semibold text-ink group-hover:text-moss-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>
               {b.title}
             </span>
             {b.status === "cancelled" ? (
@@ -535,7 +535,7 @@ export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
       </ViewBookingButton>
       {b.confirmation_code ? (
         <div className="hidden items-center gap-1 sm:flex">
-          <span className="rounded-lg bg-sun px-2.5 py-1 font-mono text-sm font-semibold tracking-wider text-ink">
+          <span className="rounded-lg bg-gold-soft px-2.5 py-1 font-mono text-sm font-semibold tracking-wider text-ink">
             {b.confirmation_code}
           </span>
           <CopyButton value={b.confirmation_code} label="Confirmation number" />

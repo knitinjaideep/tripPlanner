@@ -18,7 +18,7 @@ export function DocumentIcon({ url, className }: { url: string; className?: stri
   return (
     <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl bg-white ring-1 ring-border", className)}>
       {source === "other" ? (
-        <FileText className="size-[18px] text-lavender-ink" aria-hidden="true" />
+        <FileText className="size-[18px] text-earth-ink" aria-hidden="true" />
       ) : (
         <DriveIcon className="size-[18px]" />
       )}

@@ -74,7 +74,7 @@ export function BookingForm({ tripId, tripTimeZone, booking, initialKind = "flig
                   <span
                     className={cn(
                       "inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-3.5 text-sm font-medium text-ink transition-colors",
-                      "peer-checked:border-teal peer-checked:bg-teal-soft peer-checked:text-teal-ink peer-focus-visible:ring-3 peer-focus-visible:ring-teal/40",
+                      "peer-checked:border-moss peer-checked:bg-moss-soft peer-checked:text-moss-ink peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40",
                     )}
                   >
                     <Icon className="size-4" aria-hidden="true" />

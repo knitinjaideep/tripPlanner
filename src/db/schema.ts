@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 // Relative import: drizzle-kit loads this file outside Next's path aliases.
 import { RESERVATION_KINDS, RESERVATION_STATUSES } from "../lib/types";
+import type { Recommendation } from "../lib/recommendations";
 import {
   ITINERARY_CATEGORIES,
   ITINERARY_STATUSES,
@@ -201,11 +202,28 @@ export const places = pgTable(
     address: text(),
     maps_url: text(),
     website_url: text(),
+    /** The traveler's own notes ("Your notes"). Never written by an import. */
     planning_notes: text(),
+    /** The traveler's heart. Personal state, never written by an import. */
+    is_favorite: boolean().notNull().default(false),
+    /**
+     * Set only on places added (or claimed) by a curated collection import,
+     * e.g. "aruba-butterfly-farm", so re-running the import finds them
+     * instead of adding a second copy. Null for places the traveler adds.
+     */
+    source_key: text(),
+    /**
+     * Editorial details from the curated collection (summary, area, drive
+     * estimate, notes, sources, review date). Refreshed by a re-import; the
+     * traveler's own fields above are never touched by it.
+     */
+    recommendation: jsonb().$type<Recommendation>(),
     ...timestamps,
   },
   (t) => [
     unique("places_id_trip_unique").on(t.id, t.trip_id),
+    // One place per curated source per trip (NULLs — the traveler's own places — never collide).
+    unique("places_trip_source_unique").on(t.trip_id, t.source_key),
     foreignKey({
       name: "places_trip_same_owner_fk",
       columns: [t.trip_id, t.owner_id],
@@ -224,6 +242,11 @@ export const places = pgTable(
     check("places_maps_url_https", sql`${t.maps_url} ~ '^https://' and char_length(${t.maps_url}) <= 2048`),
     check("places_website_url_https", sql`${t.website_url} ~ '^https://' and char_length(${t.website_url}) <= 2048`),
     check("places_planning_notes_length", sql`char_length(${t.planning_notes}) <= 5000`),
+    check("places_source_key_length", sql`char_length(${t.source_key}) between 1 and 120`),
+    check(
+      "places_recommendation_object",
+      sql`${t.recommendation} is null or (jsonb_typeof(${t.recommendation}) = 'object' and ${t.source_key} is not null)`,
+    ),
   ],
 );
 
@@ -265,6 +288,18 @@ export const itineraryItems = pgTable(
     reflection: text(),
     is_favorite: boolean().notNull().default(false),
     completed_at: timestamp({ withTimezone: true, mode: "string" }),
+    /** Can be dropped without breaking the day (shown as "Optional"). */
+    is_optional: boolean().notNull().default(false),
+    /** A rest window to keep free of outings; overlaps get a gentle note. */
+    is_protected_rest: boolean().notNull().default(false),
+    /**
+     * Set only on entries written by a saved plan update (e.g.
+     * "aruba-2026:d2-baby-beach"), so re-applying finds them instead of
+     * adding a second copy. Null for everything the traveler adds.
+     */
+    source_key: text(),
+    /** Fingerprint of the planning fields as the plan last wrote them — tells later updates whether they were hand-edited. */
+    source_fingerprint: text(),
     ...timestamps,
   },
   (t) => [
@@ -285,6 +320,8 @@ export const itineraryItems = pgTable(
     }),
     // At most one itinerary entry per reservation.
     uniqueIndex("itinerary_items_reservation_unique").on(t.reservation_id).where(sql`${t.reservation_id} is not null`),
+    // One entry per plan source per trip (NULLs — hand-added entries — never collide).
+    unique("itinerary_items_trip_source_unique").on(t.trip_id, t.source_key),
     index("itinerary_items_trip_date_idx").on(t.trip_id, t.local_date, t.sort_order),
     index("itinerary_items_place_idx").on(t.place_id),
     index("itinerary_items_owner_idx").on(t.owner_id),
@@ -318,6 +355,8 @@ export const itineraryItems = pgTable(
     check("itinerary_items_rating_range", sql`${t.rating} between 1 and 5`),
     check("itinerary_items_planning_notes_length", sql`char_length(${t.planning_notes}) <= 5000`),
     check("itinerary_items_reflection_length", sql`char_length(${t.reflection}) <= 5000`),
+    check("itinerary_items_source_key_length", sql`char_length(${t.source_key}) between 1 and 120`),
+    check("itinerary_items_source_fingerprint_length", sql`char_length(${t.source_fingerprint}) <= 64`),
   ],
 );
 

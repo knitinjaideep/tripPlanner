@@ -18,3 +18,7 @@ They are used as **illustrative scenery** for trip covers and the sign-in page. 
 The "Beach" photo (Palm Beach, Aruba) is also the sign-in page photograph.
 
 CC BY and CC BY-SA licences require attribution: credits are shown in the app (cover photo credit line on trip pages and the sign-in page) and recorded here. No modifications other than resizing/recompression were made.
+
+## Brand
+
+- `public/brand/atlas-mascot.png` — Atlas mascot (smiling earth guardian), supplied by the project owner. App icons in `src/app/` are resized copies.

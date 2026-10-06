@@ -15,7 +15,7 @@ export function UserAvatar({
   return (
     <Avatar className={cn("size-10 ring-2 ring-white", className)}>
       {src ? <AvatarImage src={src} alt="" referrerPolicy="no-referrer" /> : null}
-      <AvatarFallback className="bg-teal-soft text-sm font-semibold text-teal-ink" aria-label={name}>
+      <AvatarFallback className="bg-moss-soft text-sm font-semibold text-moss-ink" aria-label={name}>
         {initials}
       </AvatarFallback>
     </Avatar>
@@ -23,9 +23,9 @@ export function UserAvatar({
 }
 
 const TRAVELER_TINTS = [
-  "bg-teal-soft text-teal-ink",
-  "bg-sun text-[#7a5a00]",
-  "bg-lavender text-lavender-ink",
+  "bg-moss-soft text-moss-ink",
+  "bg-gold-soft text-gold-ink",
+  "bg-surface-warm text-earth-ink",
   "bg-[#ffe4df] text-[#a33a2b]",
 ];
 

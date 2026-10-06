@@ -35,8 +35,8 @@ export function StarRatingInput({
               onChange={() => setRating(n)}
               className="peer sr-only"
             />
-            <span className="grid size-10 place-items-center rounded-lg peer-focus-visible:ring-3 peer-focus-visible:ring-teal/40">
-              <Star className={cn("size-6", n <= rating ? "fill-[#e8a600] text-[#e8a600]" : "text-input")} aria-hidden="true" />
+            <span className="grid size-10 place-items-center rounded-lg peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
+              <Star className={cn("size-6", n <= rating ? "fill-gold text-gold-deep" : "text-input")} aria-hidden="true" />
               <span className="sr-only">{n === 1 ? "1 star" : `${n} stars`}</span>
             </span>
           </label>
@@ -60,7 +60,7 @@ export function Stars({ value, className }: { value: number; className?: string 
   return (
     <span className={cn("inline-flex", className)} aria-label={`${value} out of 5 stars`} role="img">
       {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} className={cn("size-3.5", n <= value ? "fill-[#e8a600] text-[#e8a600]" : "text-input")} aria-hidden="true" />
+        <Star key={n} className={cn("size-3.5", n <= value ? "fill-gold text-gold-deep" : "text-input")} aria-hidden="true" />
       ))}
     </span>
   );

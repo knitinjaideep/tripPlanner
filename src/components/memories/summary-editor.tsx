@@ -150,7 +150,7 @@ function WouldReturnField({
         {WOULD_RETURN.map((option) => (
           <label
             key={option}
-            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-input bg-white px-4 text-sm font-medium text-ink has-[:checked]:border-teal has-[:checked]:bg-teal-soft/70 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-teal/40"
+            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-input bg-white px-4 text-sm font-medium text-ink has-[:checked]:border-moss has-[:checked]:bg-moss-soft/70 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-moss/40"
           >
             <input
               type="radio"
@@ -161,7 +161,7 @@ function WouldReturnField({
                 setValue(option);
                 onChange();
               }}
-              className="size-4 accent-teal"
+              className="size-4 accent-moss"
             />
             {LABELS.wouldReturn[option]}
           </label>

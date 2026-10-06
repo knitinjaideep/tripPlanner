@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# rove project notes
+# Atlas project notes
 
 - Read `docs/implementation-status.md` first — it records what is built, the architecture, and the next steps.
 - Stack: Neon Postgres + Neon Auth (`@neondatabase/auth`), Drizzle ORM over node-postgres. No Supabase, no RLS.

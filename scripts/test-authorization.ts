@@ -18,7 +18,9 @@ import { join } from "node:path";
 import { inArray, sql } from "drizzle-orm";
 import { createDb } from "../src/db";
 import * as q from "../src/db/queries";
-import { trips } from "../src/db/schema";
+import { itineraryItems, places as placesTable, trips } from "../src/db/schema";
+import { ARUBA_2026 } from "../src/lib/plans/aruba-2026";
+import { ARUBA_2026_EXPLORE } from "../src/lib/collections/aruba-2026-explore";
 import { safeNextPath } from "../src/lib/auth/redirects";
 import { zoneAbbreviation } from "../src/lib/time-zones";
 import { addDays, buildAgenda, datesBetween, standaloneScheduleFromReservation } from "../src/lib/schedule";
@@ -220,6 +222,8 @@ async function main() {
   await packingTabChecks();
   await memoriesTabChecks();
   await workflowChecks();
+  await planChecks();
+  await collectionChecks();
 
   console.log("Validation");
   await check("trip schema rejects bad zones and reversed dates", () => {
@@ -620,7 +624,8 @@ async function featureChecks() {
       id, trip_id: "t", owner_id: "o", place_id: null, reservation_id: null, title: id, category: "activity" as const,
       local_date: "2026-10-14", local_start_time: time, local_end_date: null, local_end_time: null, timezone: "UTC",
       sort_order: order, status: "planned" as const, planning_notes: null, rating: null, reflection: null,
-      is_favorite: false, completed_at: null, created_at: "2026-01-01", updated_at: "2026-01-01", place: null, reservation: null,
+      is_favorite: false, completed_at: null, is_optional: false, is_protected_rest: false, source_key: null,
+      source_fingerprint: null, created_at: "2026-01-01", updated_at: "2026-01-01", place: null, reservation: null,
     });
     const agenda = buildAgenda({
       items: [mk("late", "18:00:00", 1), mk("anytime", null, 3), mk("early", "08:00:00", 2)],
@@ -1488,6 +1493,316 @@ async function workflowChecks() {
     assert.deepEqual(t.reservations.map((r) => r.id).sort(), [flightId, stayId].sort());
     assert.equal((await q.getTripMemory(db, A, trip))?.summary, "Our best beach week");
     assert.equal((await q.listItinerary(db, A, trip, { completedOnly: true }))![0].is_favorite, true);
+  });
+}
+
+/** Saved itinerary plan (Aruba): preview / apply through the owner-scoped queries. */
+async function planChecks() {
+  console.log("Itinerary plan update");
+  const plan = ARUBA_2026;
+  const total = plan.items.length;
+  const arubaTrip = async (title: string, over: Partial<TripInput> = {}) => {
+    const id = (await q.createTrip(db, A, { ...tripInput(title), ...over })).id;
+    await q.createReservation(db, A, id, { ...flight, end_time: "15:20" });
+    await q.createReservation(db, A, id, {
+      ...flight, title: "Aruba to Newark", origin: "AUA", destination: "EWR", start_date: "2026-10-19", start_time: "15:10",
+      start_time_zone: "America/Aruba", end_date: "2026-10-19", end_time: "20:02", end_time_zone: "America/New_York",
+    });
+    return id;
+  };
+  const rows = async (tripId: string) => (await q.listItinerary(db, A, tripId))!.filter((r) => !r.reservation_id);
+  const apply = async (tripId: string, choices: Record<string, "keep" | "plan"> = {}, setTripTimeZone = false) => {
+    const preview = (await q.previewItineraryPlan(db, A, tripId, plan))!;
+    return q.applyItineraryPlan(db, A, tripId, plan, { token: preview.token, choices, setTripTimeZone });
+  };
+
+  const t = await arubaTrip("Plan trip");
+  const mine = await q.createItineraryItem(db, A, t, {
+    place_id: null, reservation_id: null, title: "Call grandma", category: "other", local_date: "2026-10-16",
+    local_start_time: "18:30", local_end_date: null, local_end_time: null, timezone: null, planning_notes: "Video call",
+  });
+  assert.ok(mine.ok);
+
+  await check("another account can't preview or apply the plan to this trip", async () => {
+    assert.equal(await q.previewItineraryPlan(db, B, t, plan), null);
+    const token = (await q.previewItineraryPlan(db, A, t, plan))!.token;
+    assert.deepEqual(await q.applyItineraryPlan(db, B, t, plan, { token, choices: {}, setTripTimeZone: true }), { ok: false, reason: "not_found" });
+    assert.equal((await rows(t)).length, 1, "nothing written");
+  });
+  await check("apply adds the whole plan once, keeps manual entries, and never writes bookings", async () => {
+    const before = (await q.getTripWithDetails(db, A, t))!.reservations;
+    const result = await apply(t);
+    assert.ok(result.ok);
+    assert.equal(result.summary.added, total);
+    const after = await rows(t);
+    assert.equal(after.length, total + 1);
+    assert.equal(after.find((r) => r.id === (mine as { id: string }).id)?.planning_notes, "Video call");
+    assert.deepEqual((await q.getTripWithDetails(db, A, t))!.reservations, before, "bookings untouched");
+    const rest = after.filter((r) => r.is_protected_rest).map((r) => r.local_date).sort();
+    assert.deepEqual(rest, ["2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"]);
+    const open = after.find((r) => r.source_key === "aruba-2026:d6-formalities")!;
+    assert.deepEqual([open.local_start_time, open.local_end_time, open.timezone], ["12:10:00", null, "America/Aruba"]);
+    const walk = after.find((r) => r.source_key === "aruba-2026:d1-walk")!;
+    assert.deepEqual([walk.local_start_time, walk.is_optional], [null, true], "flexible stays untimed (no midnight)");
+  });
+  await check("repeating the apply (same token or fresh) never adds a second copy", async () => {
+    const stale = await q.applyItineraryPlan(db, A, t, plan, { token: "0000000000000000", choices: {}, setTripTimeZone: false });
+    assert.equal(stale.ok, false);
+    assert.ok(!stale.ok && stale.reason === "stale" && stale.preview.counts.unchanged === total);
+    const again = await apply(t);
+    assert.ok(again.ok && again.summary.added === 0 && again.summary.unchanged === total);
+    assert.equal((await rows(t)).length, total + 1);
+  });
+  await check("a double click (two concurrent applies of one preview) writes once", async () => {
+    const t2 = await arubaTrip("Plan trip (double click)");
+    const { token } = (await q.previewItineraryPlan(db, A, t2, plan))!;
+    const results = await Promise.all(
+      [0, 1].map(() => q.applyItineraryPlan(db, A, t2, plan, { token, choices: {}, setTripTimeZone: false })),
+    );
+    assert.equal(results.filter((r) => r.ok).length, 1);
+    assert.ok(results.some((r) => !r.ok && r.reason === "stale"));
+    assert.equal((await rows(t2)).length, total);
+  });
+  await check("the database itself refuses a second row with the same plan source", async () => {
+    const [row] = await rows(t);
+    await assert.rejects(
+      db.insert(itineraryItems).values({
+        trip_id: t, owner_id: A, title: "Copy", category: "other", local_date: "2026-10-15", timezone: "America/Aruba",
+        source_key: row.source_key ?? "aruba-2026:d1-walk",
+      }),
+    );
+  });
+  await check("hand edits and completed visits are conflicts; “keep” leaves them exactly as they were", async () => {
+    const all = await rows(t);
+    const eagle = all.find((r) => r.source_key === "aruba-2026:d3-eagle")!;
+    const butterfly = all.find((r) => r.source_key === "aruba-2026:d3-butterfly")!;
+    const edited = await q.updateItineraryItem(db, A, t, eagle.id, {
+      place_id: null, reservation_id: null, title: eagle.title, category: eagle.category, local_date: eagle.local_date,
+      local_start_time: "10:45", local_end_date: null, local_end_time: "11:30", timezone: eagle.timezone, planning_notes: "Our own note",
+    });
+    assert.ok(edited.ok);
+    assert.equal(await q.reviewItineraryItem(db, A, t, butterfly.id, { status: "completed", rating: 5, reflection: "Arjun loved it" }), true);
+    const preview = (await q.previewItineraryPlan(db, A, t, plan))!;
+    const conflict = preview.ops.find((o) => o.kind === "conflict");
+    assert.ok(conflict?.kind === "conflict" && conflict.rowId === eagle.id && conflict.reason === "edited");
+    const done = preview.ops.find((o) => "rowId" in o && o.rowId === butterfly.id);
+    assert.ok(done?.kind === "unchanged" && done.kept.includes("reflection"));
+    const kept = await apply(t);
+    assert.ok(kept.ok && kept.summary.kept === 1 && kept.summary.updated === 0);
+    const after = await rows(t);
+    assert.equal(after.find((r) => r.id === eagle.id)?.local_start_time, "10:45:00");
+    const b = after.find((r) => r.id === butterfly.id)!;
+    assert.deepEqual([b.status, b.rating, b.reflection], ["completed", 5, "Arjun loved it"]);
+  });
+  await check("“use the plan” restores planning fields but keeps the traveler's notes and status", async () => {
+    const eagle = (await rows(t)).find((r) => r.source_key === "aruba-2026:d3-eagle")!;
+    const result = await apply(t, { "aruba-2026:d3-eagle": "plan" });
+    assert.ok(result.ok && result.summary.updated === 1);
+    const after = (await rows(t)).find((r) => r.id === eagle.id)!;
+    assert.equal(after.local_start_time, "10:30:00");
+    assert.match(after.planning_notes!, /^Our own note\n\nA relaxed stop/);
+    const next = (await q.previewItineraryPlan(db, A, t, plan))!;
+    assert.equal(next.counts.conflict + next.counts.add + next.counts.update, 0, "settled after the choice");
+  });
+  await check("the trip zone switch is opt-in and only changes the zone", async () => {
+    const t3 = await arubaTrip("Plan trip (zone)", { time_zone: "America/New_York" });
+    const preview = (await q.previewItineraryPlan(db, A, t3, plan))!;
+    assert.equal(preview.zoneOption?.current, "America/New_York");
+    const result = await apply(t3, {}, true);
+    assert.ok(result.ok && result.summary.tripTimeZone === "America/Aruba");
+    const trip = (await q.getTripWithDetails(db, A, t3))!;
+    assert.deepEqual([trip.time_zone, trip.start_date, trip.end_date, trip.title], ["America/Aruba", "2026-10-14", "2026-10-19", "Plan trip (zone)"]);
+  });
+  await check("a trip whose dates differ is blocked: flagged, nothing written", async () => {
+    const t4 = await arubaTrip("Plan trip (dates)", { end_date: "2026-10-20" });
+    const result = await apply(t4);
+    assert.deepEqual(result, { ok: false, reason: "blocked" });
+    assert.equal((await rows(t4)).length, 0);
+    assert.equal((await q.getTripWithDetails(db, A, t4))!.end_date, "2026-10-20");
+  });
+}
+
+async function collectionChecks() {
+  console.log("Curated Explore collection (Aruba)");
+  const C = ARUBA_2026_EXPLORE;
+  const newTrip = async (title: string, destination = "Aruba") =>
+    (await q.createTrip(db, A, { ...tripInput(title), destination })).id;
+  const list = async (owner: string, tripId: string) => (await q.listPlaces(db, owner, tripId))!;
+  const bySource = async (tripId: string, key: string) => (await list(A, tripId)).find((p) => p.source_key === key)!;
+  const pgCode = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      return null;
+    } catch (error) {
+      let e = error as { code?: string; cause?: unknown };
+      while (e && !e.code && e.cause) e = e.cause as typeof e;
+      return e?.code ?? "unknown";
+    }
+  };
+
+  const t = await newTrip("Aruba explore");
+  await check("first import adds all 17 (7 outings, 7 restaurants, 3 spas), scoped to the trip and owner", async () => {
+    const result = await q.importExploreCollection(db, A, t, C);
+    assert.ok(result.ok);
+    assert.deepEqual(
+      { added: result.summary.added, existing: result.summary.existing, linked: result.summary.linked.length, skipped: result.summary.skipped.length },
+      { added: 17, existing: 0, linked: 0, skipped: 0 },
+    );
+    const rows = await list(A, t);
+    assert.equal(rows.length, 17);
+    assert.ok(rows.every((p) => p.owner_id === A && p.trip_id === t && p.source_key && p.recommendation));
+    assert.equal(rows.filter((p) => p.kind === "food").length, 7);
+    assert.equal(rows.filter((p) => p.category === "spa").length, 3);
+    assert.equal(rows.filter((p) => p.kind === "place" && p.category !== "spa").length, 7);
+    const zoia = rows.find((p) => p.source_key === "aruba-hyatt-zoia-spa")!;
+    assert.deepEqual([zoia.priority, zoia.is_favorite, zoia.planning_notes, zoia.maps_url, zoia.address], ["must_do", false, null, null, null]);
+    assert.equal(zoia.recommendation?.reviewedOn, "2026-10-06");
+    // Imports never touch bookings or the itinerary.
+    assert.equal((await q.listItinerary(db, A, t))!.length, 0);
+    assert.equal((await q.getTripWithDetails(db, A, t))!.reservations.length, 0);
+  });
+
+  let babyVisit = "";
+  await check("favorites, notes, edits, visits and itinerary links survive a re-import, with no duplicates", async () => {
+    const butterfly = await bySource(t, "aruba-butterfly-farm");
+    const eagle = await bySource(t, "aruba-eagle-beach");
+    const baby = await bySource(t, "aruba-baby-beach");
+    assert.ok(await q.setPlaceFavorite(db, A, t, butterfly.id, true));
+    assert.ok(await q.updatePlaceNotes(db, A, t, butterfly.id, "Bring the carrier"));
+    assert.ok(
+      await q.updatePlace(db, A, t, eagle.id, {
+        name: "Eagle Beach (fofoti trees)", kind: "place", category: "beach", priority: "maybe",
+        address: null, maps_url: null, website_url: null, planning_notes: "Our photo spot",
+      }),
+    );
+    const visit = await q.createItineraryItem(db, A, t, {
+      place_id: baby.id, reservation_id: null, title: null, category: "activity", local_date: "2026-10-15",
+      local_start_time: "08:15", local_end_date: null, local_end_time: "10:15", timezone: null, planning_notes: "Suggestion from Explore — not booked.",
+    });
+    assert.ok(visit.ok);
+    babyVisit = visit.id;
+    const done = await q.recordPlaceVisit(db, A, t, eagle.id, { date: "2026-10-16", rating: 5, reflection: "Lovely", is_favorite: true }, { type: "new" });
+    assert.ok(done.ok);
+
+    const again = await q.importExploreCollection(db, A, t, C);
+    assert.ok(again.ok);
+    assert.deepEqual([again.summary.added, again.summary.existing, again.summary.refreshed], [0, 17, 0]);
+    const rows = await list(A, t);
+    assert.equal(rows.length, 17, "no duplicates");
+    const b = rows.find((p) => p.id === butterfly.id)!;
+    assert.deepEqual([b.is_favorite, b.planning_notes], [true, "Bring the carrier"]);
+    const e = rows.find((p) => p.id === eagle.id)!;
+    assert.deepEqual([e.name, e.priority, e.planning_notes, e.visited, e.completed_count], ["Eagle Beach (fofoti trees)", "maybe", "Our photo spot", true, 1]);
+    const items = (await q.listItinerary(db, A, t))!;
+    const bv = items.find((i) => i.id === babyVisit)!;
+    assert.deepEqual([bv.place_id, bv.place?.name, bv.status], [baby.id, "Baby Beach", "planned"]);
+  });
+  await check("a dataset edit refreshes only the editorial recommendation, never the traveler's fields", async () => {
+    const butterfly = await bySource(t, "aruba-butterfly-farm");
+    await db
+      .update(placesTable)
+      .set({ recommendation: { ...butterfly.recommendation!, summary: "An older summary" } })
+      .where(sql`${placesTable.id} = ${butterfly.id}`);
+    const result = await q.importExploreCollection(db, A, t, C);
+    assert.ok(result.ok && result.summary.refreshed === 1 && result.summary.added === 0);
+    const after = await bySource(t, "aruba-butterfly-farm");
+    assert.equal(after.recommendation?.summary, C.items[0].recommendation.summary);
+    assert.deepEqual([after.is_favorite, after.planning_notes], [true, "Bring the carrier"]);
+  });
+  await check("adding to the itinerary links the right Explore record, in America/Aruba wall-clock time", async () => {
+    const zoia = await bySource(t, "aruba-hyatt-zoia-spa");
+    const added = await q.createItineraryItem(db, A, t, {
+      place_id: zoia.id, reservation_id: null, title: null, category: "activity", local_date: "2026-10-16",
+      local_start_time: "12:30", local_end_date: null, local_end_time: "14:30", timezone: null, planning_notes: null,
+    });
+    assert.ok(added.ok);
+    const entry = (await q.listItinerary(db, A, t))!.find((i) => i.id === added.id)!;
+    assert.deepEqual(
+      [entry.place_id, entry.place?.category, entry.local_date, entry.local_start_time, entry.local_end_time, entry.timezone, entry.status, entry.reservation_id],
+      [zoia.id, "spa", "2026-10-16", "12:30:00", "14:30:00", "America/Aruba", "planned", null],
+    );
+    const place = await bySource(t, "aruba-hyatt-zoia-spa");
+    assert.deepEqual([place.planned_count, place.next_planned_date], [1, "2026-10-16"]);
+  });
+  await check("concurrent imports (double click / two tabs) converge on one copy of each", async () => {
+    const t2 = await newTrip("Aruba explore (concurrent)");
+    const [r1, r2] = await Promise.all([q.importExploreCollection(db, A, t2, C), q.importExploreCollection(db, A, t2, C)]);
+    assert.ok(r1.ok && r2.ok);
+    assert.deepEqual([r1.summary.added + r2.summary.added, r1.summary.existing + r2.summary.existing], [17, 17]);
+    assert.equal((await list(A, t2)).length, 17);
+  });
+  await check("the database refuses a second place with the same source key, or a recommendation without one", async () => {
+    const zoia = await bySource(t, "aruba-hyatt-zoia-spa");
+    assert.equal(
+      await pgCode(() => db.insert(placesTable).values({ trip_id: t, owner_id: A, name: "Copy", kind: "place", category: "spa", source_key: zoia.source_key })),
+      "23505",
+    );
+    assert.equal(
+      await pgCode(() =>
+        db.insert(placesTable).values({ trip_id: t, owner_id: A, name: "No key", kind: "place", category: "spa", recommendation: zoia.recommendation }),
+      ),
+      "23514",
+    );
+  });
+  await check("the traveler's own matching place is claimed (kept as theirs); ambiguous ones are skipped and flagged", async () => {
+    const t3 = await newTrip("Aruba explore (own places)");
+    const own = await q.createPlace(db, A, t3, {
+      name: "eagle beach", kind: "place", category: "experience", priority: "maybe", address: null, maps_url: null,
+      website_url: null, planning_notes: "Sunset photos",
+    });
+    assert.ok(own.ok);
+    await q.setPlaceFavorite(db, A, t3, own.id, true);
+    const visit = await q.createItineraryItem(db, A, t3, {
+      place_id: own.id, reservation_id: null, title: null, category: "activity", local_date: "2026-10-17",
+      local_start_time: null, local_end_date: null, local_end_time: null, timezone: null, planning_notes: null,
+    });
+    assert.ok(visit.ok);
+    for (const name of ["Baby Beach", "Baby beach"]) {
+      await q.createPlace(db, A, t3, { name, kind: "place", category: "beach", priority: "maybe", address: null, maps_url: null, website_url: null, planning_notes: null });
+    }
+    await q.createPlace(db, A, t3, { name: "Lucca", kind: "food", category: "restaurant", priority: "maybe", address: null, maps_url: null, website_url: null, planning_notes: null });
+
+    const result = await q.importExploreCollection(db, A, t3, C);
+    assert.ok(result.ok);
+    assert.deepEqual(result.summary.linked, [{ name: "Eagle Beach", placeName: "eagle beach" }]);
+    assert.deepEqual(result.summary.skipped, [{ name: "Baby Beach", matches: ["Baby Beach", "Baby beach"] }]);
+    assert.deepEqual(result.summary.possibleDuplicates, [{ name: "Lucca Trattoria", matches: ["Lucca"] }]);
+    assert.equal(result.summary.added, 15);
+    const rows = await list(A, t3);
+    assert.equal(rows.length, 4 + 15);
+    const claimed = rows.find((p) => p.id === own.id)!;
+    assert.deepEqual(
+      [claimed.source_key, claimed.name, claimed.category, claimed.priority, claimed.planning_notes, claimed.is_favorite, claimed.planned_count],
+      ["aruba-eagle-beach", "eagle beach", "experience", "maybe", "Sunset photos", true, 1],
+    );
+    assert.ok(claimed.recommendation);
+    // Repeating it is safe: nothing new, the skip is reported again.
+    const again = await q.importExploreCollection(db, A, t3, C);
+    assert.ok(again.ok && again.summary.added === 0 && again.summary.linked.length === 0 && again.summary.skipped.length === 1);
+    assert.equal((await list(A, t3)).length, 19);
+  });
+  await check("another account can't import into, favorite, or annotate someone else's trip or places", async () => {
+    const zoia = await bySource(t, "aruba-hyatt-zoia-spa");
+    assert.deepEqual(await q.importExploreCollection(db, B, t, C), { ok: false, reason: "not_found" });
+    assert.equal(await q.setPlaceFavorite(db, B, t, zoia.id, true), false);
+    assert.equal(await q.updatePlaceNotes(db, B, t, zoia.id, "hijacked"), false);
+    // Not even by pairing A's place with B's own trip.
+    const tbAruba = (await q.createTrip(db, B, tripInput("B Aruba"))).id;
+    assert.equal(await q.setPlaceFavorite(db, B, tbAruba, zoia.id, true), false);
+    assert.equal(await q.updatePlaceNotes(db, B, tbAruba, zoia.id, "hijacked"), false);
+    assert.equal(await q.listPlaces(db, B, t), null);
+    const after = await bySource(t, "aruba-hyatt-zoia-spa");
+    assert.deepEqual([after.is_favorite, after.planning_notes], [false, null]);
+    assert.equal((await list(A, t)).length, 17);
+    // B's own Aruba trip gets its own, separate copy.
+    const own = await q.importExploreCollection(db, B, tbAruba, C);
+    assert.ok(own.ok && own.summary.added === 17);
+    assert.equal((await list(A, t)).length, 17);
+  });
+  await check("a trip that isn't Aruba is refused, nothing written", async () => {
+    const other = await newTrip("Lisbon", "Portugal");
+    assert.deepEqual(await q.importExploreCollection(db, A, other, C), { ok: false, reason: "not_matching" });
+    assert.equal((await list(A, other)).length, 0);
   });
 }
 

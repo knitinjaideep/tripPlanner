@@ -1,4 +1,4 @@
-# rove
+# Atlas
 
 A personal travel organizer: sign in with Google, keep each trip's flights,
 stays and other reservations — with confirmation codes, local times and time

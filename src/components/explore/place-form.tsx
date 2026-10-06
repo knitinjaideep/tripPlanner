@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 const p = "place";
 
 const pill =
-  "inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-4 text-sm font-medium text-ink transition-colors peer-checked:border-teal peer-checked:bg-teal-soft peer-checked:text-teal-ink peer-focus-visible:ring-3 peer-focus-visible:ring-teal/40";
+  "inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-4 text-sm font-medium text-ink transition-colors peer-checked:border-moss peer-checked:bg-moss-soft peer-checked:text-moss-ink peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40";
 
 export function PlaceForm({
   tripId,
@@ -73,7 +73,7 @@ export function PlaceForm({
             autoComplete="off"
           />
           {similar.length > 0 ? (
-            <p role="status" className="mt-2 flex gap-2 rounded-xl bg-sun/70 px-3 py-2 text-sm text-[#5a4a10]">
+            <p role="status" className="mt-2 flex gap-2 rounded-xl bg-gold-soft/70 px-3 py-2 text-sm text-gold-ink">
               <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>
                 You already have {similar.slice(0, 2).map((s) => `“${s.name}”`).join(" and ")}
@@ -149,7 +149,7 @@ export function PlaceForm({
           defaultValue={place?.maps_url ?? ""}
           error={errors.maps_url}
           optional
-          hint="Share → Copy link in Google Maps pins the exact place. Without it, rove links to a Maps search for the name and address."
+          hint="Share → Copy link in Google Maps pins the exact place. Without it, Atlas links to a Maps search for the name and address."
         />
         <TextField
           idPrefix={p}

@@ -43,9 +43,9 @@ export function GoogleSignInButton({ next }: { next: string }) {
         onClick={signIn}
         disabled={pending}
         aria-busy={pending}
-        className="focus-ring flex h-13 w-full items-center justify-center gap-3 rounded-xl border border-input bg-white px-5 text-[0.9375rem] font-semibold text-ink shadow-[0_1px_2px_rgba(16,47,64,0.06)] transition-colors hover:bg-[#f7fafa] disabled:cursor-not-allowed disabled:opacity-60"
+        className="focus-ring flex h-13 w-full items-center justify-center gap-3 rounded-xl border border-input bg-white px-5 text-[0.9375rem] font-semibold text-ink shadow-[0_1px_2px_rgba(24,58,47,0.06)] transition-colors hover:bg-[#f7f9f1] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? <Loader2 className="size-5 animate-spin text-teal" aria-hidden="true" /> : <GoogleIcon />}
+        {pending ? <Loader2 className="size-5 animate-spin text-moss" aria-hidden="true" /> : <GoogleIcon />}
         {pending ? "Opening Google…" : "Continue with Google"}
       </button>
       {error ? (

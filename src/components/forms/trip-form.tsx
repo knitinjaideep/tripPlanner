@@ -106,10 +106,10 @@ export function TripForm({ trip, defaultTimeZone, action, cancelHref }: Props) {
                 defaultChecked={(trip?.cover_image ?? DEFAULT_COVER) === cover.key}
                 className="peer sr-only"
               />
-              <span className="relative block aspect-[4/3] overflow-hidden rounded-xl ring-1 ring-border transition peer-checked:ring-3 peer-checked:ring-teal peer-focus-visible:ring-3 peer-focus-visible:ring-teal/50">
+              <span className="relative block aspect-[4/3] overflow-hidden rounded-xl ring-1 ring-border transition peer-checked:ring-3 peer-checked:ring-moss peer-focus-visible:ring-3 peer-focus-visible:ring-moss/50">
                 <Image src={cover.image} alt="" fill sizes="(min-width: 640px) 160px, 45vw" className="object-cover" />
               </span>
-              <span className="absolute top-2 right-2 hidden size-6 place-items-center rounded-full bg-teal text-white peer-checked:grid">
+              <span className="absolute top-2 right-2 hidden size-6 place-items-center rounded-full bg-moss text-white peer-checked:grid">
                 <Check className="size-3.5" aria-hidden="true" />
               </span>
               <span className="mt-1.5 block text-sm font-medium text-ink">{cover.label}</span>

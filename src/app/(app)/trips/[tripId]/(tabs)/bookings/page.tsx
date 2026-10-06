@@ -44,7 +44,7 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
                 : `${trip.reservations.length} ${trip.reservations.length === 1 ? "reservation" : "reservations"}, in order. Times are local.`}
             </p>
           </div>
-          <AddBookingButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white hover:bg-coral-hover">
+          <AddBookingButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-moss-hover">
             <Plus className="size-4" aria-hidden="true" /> Add booking
           </AddBookingButton>
         </div>
@@ -56,7 +56,7 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
               Flights, stays, car rentals, tables and tours — add each one with its confirmation number so it’s
               always easy to find.
             </p>
-            <AddBookingButton className="focus-ring mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-teal-ink px-5 text-[0.9375rem] font-semibold text-teal-ink hover:bg-teal-soft">
+            <AddBookingButton className="focus-ring mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-moss-ink px-5 text-[0.9375rem] font-semibold text-moss-ink hover:bg-moss-soft">
               <Plus className="size-4" aria-hidden="true" /> Add your first booking
             </AddBookingButton>
           </div>
@@ -89,17 +89,17 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
       </section>
 
       <aside id="documents" aria-labelledby="documents-heading" className="scroll-mt-24 lg:col-span-4">
-        <div className="rounded-2xl bg-lavender p-5 sm:p-6 lg:sticky lg:top-24">
+        <div className="rounded-2xl bg-surface-warm p-5 sm:p-6 lg:sticky lg:top-24">
           <div className="flex items-center justify-between gap-3">
-            <h2 id="documents-heading" className="eyebrow flex items-center gap-2 text-lavender-ink">
+            <h2 id="documents-heading" className="eyebrow flex items-center gap-2 text-earth-ink">
               <FileText className="size-4" aria-hidden="true" /> All documents
             </h2>
-            <AddDocumentButton className="focus-ring -mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-lavender-ink hover:bg-white/60">
+            <AddDocumentButton className="focus-ring -mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-earth-ink hover:bg-white/60">
               <Plus className="size-4" aria-hidden="true" /> Add link
             </AddDocumentButton>
           </div>
           {trip.documents.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-[#4f4a63]">
+            <p className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-earth-ink">
               No links yet. Add a Drive folder for the whole trip, or attach files to a specific booking.
             </p>
           ) : (

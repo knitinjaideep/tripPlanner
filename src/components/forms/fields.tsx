@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { timeZoneLabel, timeZoneOptions } from "@/lib/time-zones";
 
 export const controlClass =
-  "h-11 rounded-[10px] border-input bg-white px-3.5 text-[0.9375rem] text-ink shadow-none placeholder:text-[#8a979f] focus-visible:border-teal focus-visible:ring-3 focus-visible:ring-teal/25 aria-invalid:border-destructive aria-invalid:ring-destructive/15 md:text-[0.9375rem]";
+  "h-11 rounded-[10px] border-input bg-white px-3.5 text-[0.9375rem] text-ink shadow-none placeholder:text-[#8e9480] focus-visible:border-moss focus-visible:ring-3 focus-visible:ring-moss/25 aria-invalid:border-destructive aria-invalid:ring-destructive/15 md:text-[0.9375rem]";
 
 type FieldShellProps = {
   id: string;
@@ -145,19 +145,22 @@ export function SubmitButton({
   children,
   pendingLabel,
   className,
+  disabled = false,
 }: {
   pending: boolean;
   children: ReactNode;
   pendingLabel: string;
   className?: string;
+  /** Not ready to submit (e.g. a confirmation is still needed). */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       className={cn(
-        "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-coral-hover disabled:cursor-not-allowed disabled:opacity-70",
+        "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-moss-hover disabled:cursor-not-allowed disabled:opacity-70",
         className,
       )}
     >

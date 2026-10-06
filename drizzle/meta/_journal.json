@@ -29,6 +29,20 @@
       "when": 1791246229707,
       "tag": "0003_memories_would_return",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791308075269,
+      "tag": "0004_itinerary_plan_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791310373396,
+      "tag": "0005_explore_recommendations",
+      "breakpoints": true
     }
   ]
 }

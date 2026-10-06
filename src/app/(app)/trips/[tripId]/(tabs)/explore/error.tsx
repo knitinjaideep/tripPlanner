@@ -16,7 +16,7 @@ export default function ExploreError({ error, reset }: { error: Error & { digest
       <button
         type="button"
         onClick={reset}
-        className="focus-ring mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-coral px-5 font-semibold text-white hover:bg-coral-hover"
+        className="focus-ring mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-moss-ink px-5 font-semibold text-white hover:bg-moss-hover"
       >
         <RotateCcw className="size-4" aria-hidden="true" /> Try again
       </button>

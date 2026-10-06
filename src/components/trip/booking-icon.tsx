@@ -13,11 +13,11 @@ export const BOOKING_ICONS: Record<ReservationKind, LucideIcon> = {
 };
 
 const TINTS: Record<ReservationKind, string> = {
-  flight: "bg-teal-soft text-teal-ink",
-  lodging: "bg-lavender text-lavender-ink",
-  car: "bg-[#e8f0fb] text-[#2d5a96]",
-  train: "bg-[#e8f0fb] text-[#2d5a96]",
-  activity: "bg-sun text-[#7a5a00]",
+  flight: "bg-moss-soft text-moss-ink",
+  lodging: "bg-surface-warm text-earth-ink",
+  car: "bg-info-soft text-info-ink",
+  train: "bg-info-soft text-info-ink",
+  activity: "bg-gold-soft text-gold-ink",
   restaurant: "bg-[#ffe9e4] text-[#a33a2b]",
   other: "bg-secondary text-ink",
 };

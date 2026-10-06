@@ -4,7 +4,7 @@ import { useMemo, useOptimistic, useTransition } from "react";
 import { Compass, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { reorderFlexibleEntries } from "@/app/actions/itinerary";
-import { findOverlaps, splitDay, type AgendaEntry } from "@/lib/schedule";
+import { findOverlapDetails, splitDay, type AgendaEntry } from "@/lib/schedule";
 import { EntryCard } from "./entry-card";
 import { AddActivityButton, useItinerary } from "./itinerary-workspace";
 
@@ -14,7 +14,7 @@ const movable = (e: AgendaEntry) => e.role !== "end" && !e.cancelled;
 export function DayTimeline({ entries }: { entries: AgendaEntry[] }) {
   const { tripId } = useItinerary();
   const { timed, flexible } = useMemo(() => splitDay(entries), [entries]);
-  const overlaps = useMemo(() => findOverlaps(timed), [timed]);
+  const overlaps = useMemo(() => findOverlapDetails(timed), [timed]);
 
   const serverOrder = useMemo(() => flexible.filter(movable).map((e) => e.key), [flexible]);
   const [order, setOptimisticOrder] = useOptimistic(serverOrder);
@@ -62,7 +62,7 @@ export function DayTimeline({ entries }: { entries: AgendaEntry[] }) {
         <section aria-labelledby="flexible-heading">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h3 id="flexible-heading" className="eyebrow text-ink">
-              Flexible
+              {flexible.some((e) => e.item?.is_optional) ? "Flexible & optional" : "Flexible"}
             </h3>
             <p className="text-sm text-muted-foreground">No set time{ordered.length > 1 ? " · in your order" : ""}</p>
           </div>
@@ -105,7 +105,7 @@ function EmptyDay() {
         Leave it open or add something to look forward to.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
-        <AddActivityButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-teal-ink px-5 text-[0.9375rem] font-semibold text-teal-ink hover:bg-teal-soft">
+        <AddActivityButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-moss-ink px-5 text-[0.9375rem] font-semibold text-moss-ink hover:bg-moss-soft">
           <Plus className="size-4" aria-hidden="true" /> Add activity
         </AddActivityButton>
         <AddActivityButton

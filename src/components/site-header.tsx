@@ -11,7 +11,7 @@ export function SiteHeader({ user }: { user: CurrentUser }) {
         <nav aria-label="Account" className="flex items-center gap-2 sm:gap-6">
           <Link
             href="/trips"
-            className="focus-ring hidden min-h-11 items-center rounded-lg px-2 text-[0.9375rem] font-medium text-ink hover:text-teal-ink sm:inline-flex"
+            className="focus-ring hidden min-h-11 items-center rounded-lg px-2 text-[0.9375rem] font-medium text-ink hover:text-moss-ink sm:inline-flex"
           >
             My trips
           </Link>

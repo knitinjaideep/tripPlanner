@@ -32,9 +32,9 @@ export function TripCard({
   return (
     <Link
       href={`/trips/${trip.id}`}
-      className="group card-surface focus-ring block overflow-hidden transition-shadow hover:shadow-[0_2px_4px_rgba(16,47,64,0.06),0_16px_32px_-16px_rgba(16,47,64,0.18)]"
+      className="group card-surface focus-ring block overflow-hidden transition-shadow hover:shadow-[0_2px_4px_rgba(24,58,47,0.06),0_16px_32px_-16px_rgba(24,58,47,0.18)]"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-teal-soft">
+      <div className="relative aspect-[16/10] overflow-hidden bg-moss-soft">
         <Image
           src={cover.image}
           alt=""
@@ -53,7 +53,7 @@ export function TripCard({
           <span
             className={cn(
               "absolute top-3 left-3 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm",
-              phase === "current" ? "bg-teal-ink text-white" : "bg-coral text-white",
+              phase === "current" ? "bg-moss-ink text-white" : "bg-gold text-forest",
             )}
           >
             {badge}
@@ -62,7 +62,7 @@ export function TripCard({
       </div>
       <div className="space-y-3 p-5">
         <div>
-          <p className="eyebrow flex items-center gap-1.5 text-teal-ink">
+          <p className="eyebrow flex items-center gap-1.5 text-moss-ink">
             <MapPin className="size-3.5" aria-hidden="true" />
             <span className="truncate">{trip.destination}</span>
           </p>

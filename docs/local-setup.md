@@ -1,6 +1,6 @@
-# Running rove locally
+# Running Atlas locally
 
-rove uses one **Neon** project for both Postgres (your trips) and **Neon Auth**
+Atlas uses one **Neon** project for both Postgres (your trips) and **Neon Auth**
 (Google sign-in). Everything secret lives in `.env.local`, which git ignores.
 Allow about 15 minutes.
 
@@ -37,7 +37,7 @@ Then open **Auth → Configuration** and copy the **Auth URL** — it looks like
 `NEON_AUTH_BASE_URL`.
 
 Neon Auth keeps its users and sessions in a `neon_auth` schema in this
-database. rove never creates, edits or migrates those tables.
+database. Atlas never creates, edits or migrates those tables.
 
 ## 5. Google sign-in
 
@@ -46,25 +46,25 @@ credentials**. For local development that is enough:
 
 - No Google Cloud setup is needed.
 - Limitation: Google's consent screen shows **Neon's** name and logo, not
-  rove's.
+  Atlas's.
 - Neon says shared credentials are for development only; use your own
   Google OAuth client before any real launch.
 
-rove asks only for basic identity (name, email, profile photo). It never
+Atlas asks only for basic identity (name, email, profile photo). It never
 requests Google Drive or Gmail access — Drive documents are saved as plain
 links.
 
-**Optional — your own Google OAuth client** (for rove branding):
+**Optional — your own Google OAuth client** (for Atlas branding):
 
 1. Google Cloud Console → **APIs & Services → OAuth consent screen**: app
-   name "rove", your support email, scopes `openid`, `email`, `profile`
+   name "Atlas", your support email, scopes `openid`, `email`, `profile`
    only. While in *Testing*, add your Google account under **Test users**.
 2. **Credentials → Create credentials → OAuth client ID → Web application**.
 3. **Authorized redirect URIs:** add exactly
    `<NEON_AUTH_BASE_URL>/callback/google`
    e.g. `https://ep-….neonauth.us-east-2.aws.neon.tech/neondb/auth/callback/google`.
    Copy the exact Auth URL from the Neon Console — this callback belongs to
-   Neon Auth, not to rove, and is different from rove's `callbackURL`.
+   Neon Auth, not to Atlas, and is different from Atlas's `callbackURL`.
 4. In Neon: **Auth → Configuration → OAuth providers → Google** → switch to
    custom credentials and enter the Client ID and Client secret there (in
    the dashboard only — never in `.env.local` or the repo).
@@ -78,8 +78,8 @@ trusted domain. Use `localhost`, not `127.0.0.1`, consistently.
 
 After Google, Neon Auth returns the browser to
 `http://localhost:3000/trips?neon_auth_session_verifier=…` (or the page you
-were heading to). rove's proxy exchanges that one-time verifier for session
-cookies. There is no `/auth/callback` route to configure in rove.
+were heading to). Atlas's proxy exchanges that one-time verifier for session
+cookies. There is no `/auth/callback` route to configure in Atlas.
 
 **Browser note:** Neon Auth's session cookies are `Secure`. Chrome, Edge and
 Firefox accept them on `http://localhost`; Safari does not. Use Chrome/Firefox
@@ -142,9 +142,9 @@ with an empty dashboard (no sample trips are created). Click **New trip**.
 
 | Symptom | Likely cause |
 |---|---|
-| "Connect rove to Neon" screen | A variable is missing from `.env.local`, or the dev server wasn't restarted. The screen names what's missing. |
+| "Connect Atlas to Neon" screen | A variable is missing from `.env.local`, or the dev server wasn't restarted. The screen names what's missing. |
 | Google shows `redirect_uri_mismatch` | Custom Google client only: the redirect URI must be exactly `<NEON_AUTH_BASE_URL>/callback/google` from the same branch. |
-| After Google you don't come back to rove | `localhost` isn't a trusted domain for this branch (step 6). |
+| After Google you don't come back to Atlas | `localhost` isn't a trusted domain for this branch (step 6). |
 | Back on the sign-in page with "couldn't finish signing you in" | The verifier couldn't be exchanged: sign-in started on a different host (`127.0.0.1` vs `localhost`), cookies blocked (Safari on http), or the Auth URL is from a different branch. |
 | "We couldn't check your session" | The server can't reach `NEON_AUTH_BASE_URL` (typo, offline). |
 | Trips page errors after sign-in | Migrations not applied to this branch's database (`npm run db:migrate`). |
@@ -166,7 +166,9 @@ time zones, booking de-duplication, milestones) and needs no database. Try
 it with `TZ=Pacific/Kiritimati` and `TZ=Pacific/Pago_Pago` too.
 `npm run test:explore` does the same for Explore's filters and helpers, and
 `npm run test:packing` for packing progress, merges and the checkbox save queue,
-and `npm run test:memories` for the journal (phase, counts, grouping, capture).
+`npm run test:memories` for the journal (phase, counts, grouping, capture),
+and `npm run test:recommendations` for the curated Aruba collection (dataset,
+import plan, filters, prices, itinerary conflict checks).
 
 A quick disposable Postgres for `test:authz` (Homebrew `postgresql@17`):
 

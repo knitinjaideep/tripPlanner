@@ -135,7 +135,9 @@ export type ItineraryItemInput = Pick<
   | "local_end_time"
   | "timezone"
   | "planning_notes"
->;
+> &
+  /** Omitted (e.g. "Add to this day" from Explore) = keep the column as it is / its default. */
+  Partial<Pick<ItineraryItem, "is_optional" | "is_protected_rest">>;
 
 /** Completion and reflection fields (completed_at is set by the server). */
 export type VisitReviewInput = Pick<ItineraryItem, "status" | "rating" | "reflection" | "is_favorite">;

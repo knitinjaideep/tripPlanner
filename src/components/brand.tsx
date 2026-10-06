@@ -1,17 +1,41 @@
+import type React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-/** Compass-star mark used in the header and sign-in page. */
+/**
+ * Compass-star badge: forest disc, gold star — the emblem on the mascot's
+ * forehead. Used in the header and wherever the full mascot is too much.
+ */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className={cn("size-8", className)}>
-      <circle cx="16" cy="16" r="14.5" fill="none" stroke="currentColor" strokeOpacity=".28" strokeWidth="1.5" />
-      <path
-        d="M16 4.5 18.4 13.6 27.5 16 18.4 18.4 16 27.5 13.6 18.4 4.5 16 13.6 13.6Z"
-        fill="currentColor"
-      />
-      <circle cx="16" cy="16" r="2" fill="var(--background)" />
+      <circle cx="16" cy="16" r="15.5" fill="var(--forest)" />
+      <circle cx="16" cy="16" r="11.75" fill="none" stroke="var(--gold)" strokeOpacity=".45" strokeWidth="1.1" />
+      <path d="M16 5.5 18.1 13.9 26.5 16 18.1 18.1 16 26.5 13.9 18.1 5.5 16 13.9 13.9Z" fill="var(--gold)" />
+      <path d="M16 10 17 15 22 16 17 17 16 22 15 17 10 16 15 15Z" fill="var(--gold-soft)" opacity=".9" />
+      <circle cx="16" cy="16" r="1.6" fill="var(--forest)" />
     </svg>
+  );
+}
+
+/** Four-point sparkle used around the wordmark. */
+function Sparkle({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden="true" className={cn("atlas-sparkle absolute", className)} style={style}>
+      <path d="M6 0 7.1 4.9 12 6 7.1 7.1 6 12 4.9 7.1 0 6 4.9 4.9Z" fill="var(--gold)" />
+    </svg>
+  );
+}
+
+/** "ATLAS" in capitals with a slow gold shimmer and a few twinkling sparkles. */
+export function Wordmark({ className }: { className?: string }) {
+  return (
+    <span className={cn("relative inline-block", className)}>
+      <span className="atlas-wordmark font-display text-[1.5rem] leading-none font-semibold tracking-[0.12em]">ATLAS</span>
+      <Sparkle className="-top-2.5 -right-3 size-3.5" />
+      <Sparkle className="-top-2 left-[40%] size-2" style={{ animationDelay: "1.1s" }} />
+      <Sparkle className="-bottom-2 -left-1 size-2.5" style={{ animationDelay: "2.2s" }} />
+    </span>
   );
 }
 
@@ -19,11 +43,11 @@ export function Logo({ href = "/trips", className }: { href?: string; className?
   return (
     <Link
       href={href}
-      className={cn("focus-ring inline-flex items-center gap-2 rounded-lg text-ink", className)}
-      aria-label="rove home"
+      className={cn("focus-ring inline-flex items-center gap-2.5 rounded-lg text-ink", className)}
+      aria-label="Atlas home"
     >
-      <LogoMark className="text-teal" />
-      <span className="font-display text-[1.75rem] leading-none font-semibold">rove</span>
+      <LogoMark />
+      <Wordmark />
     </Link>
   );
 }

@@ -1,9 +1,161 @@
-# rove — implementation status
+# Atlas — implementation status
 
-_Last updated: 2026-10-06 (deployment readiness for Vercel)._
+_Last updated: 2026-10-06 (Aruba Explore recommendations: curated collection, favorites, notes, conflict checks)._
 
 This file is the hand-off point for later prompts: what exists, how it is
 put together, and what comes next.
+
+## Aruba Explore recommendations (2026-10-06)
+
+A curated, version-controlled collection added to Explore on request — never
+seeded, never written during build or render.
+
+- **Dataset:** `src/lib/collections/aruba-2026-explore.ts` — 17 items (7
+  outings, 7 restaurants with vegetarian options, 3 spas), stable source keys
+  (`aruba-butterfly-farm` …), content as researched by the traveler on
+  2026-10-06 (stored as `reviewedOn`, `verification: "editorial"` — not
+  independently verified). No addresses, coordinates, ratings, hours beyond
+  the quoted research, or anything identifying the apartment. Unknown prices
+  say "Unknown — request a current quote."
+- **Import plan (pure):** `src/lib/collections/collection.ts`
+  `planCollectionImport` — same `source_key` → existing (editorial
+  `recommendation` refreshed if the dataset changed); the traveler's own place
+  with the same normalized name / alias and kind, unique → claimed (their
+  name, category, priority, notes, favorite, visits kept); several → skipped
+  and flagged; similar name → added and flagged as a possible duplicate.
+- **Migration `0005_explore_recommendations`** (additive): `places.is_favorite`
+  (bool, default false), `source_key`, `recommendation` jsonb (needs a
+  source key), unique `(trip_id, source_key)`; `spa` added to place
+  categories. Applied to the Neon `production` branch 2026-10-06 (1 trip,
+  3 bookings, 48 itinerary entries, 0 places before and after).
+- **Server:** `importExploreCollection` (trip row locked, one transaction,
+  `ON CONFLICT DO NOTHING` on the unique key; refuses non-Aruba trips),
+  `setPlaceFavorite` (set, not toggle), `updatePlaceNotes` — queries → DAL
+  (`importExploreCollectionForUser`, `setPlaceFavoriteForUser`,
+  `updatePlaceNotesForUser`, read-only `getExploreCollectionsForUser` which
+  also lists the user's other matching trips) → actions in
+  `src/app/actions/places.ts` (Zod, `guarded()`). Never touches bookings or
+  the itinerary. Personal state (favorite, notes) is owner-scoped like
+  everything else — there is no shared household state yet.
+- **UI:** "Explore Aruba" heading; "Add Aruba recommendations" card (hidden
+  once all 17 are in, "Add the other N" if some were skipped; result summary
+  with linked / skipped / possible duplicates stays until dismissed; links to
+  other Aruba trips). Tabs All / Beaches & outings / Food / Spas; chips
+  Favorites / Near stay (max drive ≤ 15) / Short outings (max visit ≤ 60,
+  excl. travel; meals and spas never count) / Vegetarian options / Parent
+  solo time (`?only=`); search over name, area, cuisine, tags; order:
+  priority (tier) → max drive → name. Cards: eyebrow, priority badge (gold
+  "Top pick"), summary, "est. N–M min drive", ≤ 3 tags, heart, next step.
+  Detail: facts, long-drive callout, Open in Maps (Google Maps search for
+  name + "Aruba"), Website, favorite, Add to itinerary, Mark visited, spa
+  "Take turns" + "Plan a turn at these times", published price with
+  integer-cent estimate (ZoiA $224.25 / $448.50), notes lists with the
+  family-notes disclaimer, Your notes editor, Sources + review date.
+- **Add to itinerary:** existing `saveItineraryItem`; prefilled category,
+  end time from the suggested length (spa: total time away), editable note
+  ("Suggestion from Explore — not booked.", drive estimate, source). Pure
+  `src/lib/outing-check.ts` checks the day as you type: overlaps, drive
+  buffers, protected rest blocks (whole-family → must tick "Keep this time
+  anyway"; solo spa → informational), two overlapping solo spa turns,
+  arrival day (+ ~3 h after landing) and departure day (+ ~5 h before the
+  flight, the saved plan's buffers). Nothing is moved; no participants model
+  exists, so turn-taking stays as guidance/notes.
+- Checks: typecheck, lint, build, `db:check`; new `test:recommendations` 27
+  (also at TZ Pacific/Kiritimati and Pacific/Pago_Pago); `test:authz` 119
+  (9 new: 17 added, re-import preserves favorite / notes / edits / visits /
+  links, editorial refresh, itinerary link in America/Aruba, concurrent
+  imports, DB uniqueness, claiming + skip + duplicate flags, cross-owner
+  refusals, non-Aruba refusal) on disposable Postgres 17 with 0000–0005;
+  explore / itinerary / plan / packing / memories pass. Rendered with
+  fixture data on a temporary, since-deleted route at 1440 / 390 px: no
+  overflow, ≤ 1 mascot, no console errors; Baby Beach 09:30 on Day 2 warns
+  about the rest block and blocks saving until kept; a spa turn at 12:30 is
+  informational. Not run signed in.
+
+## Aruba itinerary update (2026-10-06)
+
+A saved, typed plan applied through a preview — not a generic importer.
+
+- **Plan data:** `src/lib/plans/aruba-2026.ts` (47 entries, day themes,
+  flight anchors 15:20 arrival / 15:10 departure, outdated-entry rules).
+  Flights and the stay are never written — they come from the bookings.
+  Categories: Travel → `transport`, Stay → `lodging`, Beach → `activity`
+  (no new category).
+- **Diff (pure):** `src/lib/plans/itinerary-plan.ts` — `planPreview`
+  matches by `source_key` (`aruba-2026:<key>`), else same day + normalized
+  title / alias; hand-edited, completed or reflected entries are conflicts
+  (default "keep mine"); untouched entries from an earlier version update;
+  outdated unsourced entries (noon arrival, 15:00 nap, 17:00 sunset, Day 6
+  nap, flight copies) are conflicts. Checks: trip dates (mismatch blocks
+  apply), trip zone (opt-in switch), travelers, flight times / zones, stay
+  name and check-in/out, rental booking. User notes are never dropped
+  (`mergeNotes`). Explore places link only on one exact name match.
+- **Migration `0004_itinerary_plan_fields`** (additive, applied to the Neon
+  `production` branch 2026-10-06): `itinerary_items.is_optional`,
+  `is_protected_rest` (bool, default false), `source_key`,
+  `source_fingerprint`; unique `(trip_id, source_key)`. The fingerprint is
+  always the plan's own values, so merged / edited rows are never
+  overwritten automatically.
+- **Server:** `previewItineraryPlan` / `applyItineraryPlan` (queries → DAL
+  `previewItineraryPlanForUser` / `applyItineraryPlanForUser` → actions in
+  `src/app/actions/itinerary-plan.ts`, Zod `planApplySchema`, `guarded()`).
+  Apply locks the trip row, recomputes the preview, refuses a stale token
+  (returns the fresh preview), writes in one transaction. Never writes
+  status / rating / reflection / favorite / place links or bookings.
+- **UI:** "Update Aruba family plan" card on the itinerary (sheet with
+  checks, conflicts, changes by day, zone opt-in, Apply, summary). Scenic
+  cover panel around the day strip + day header, mascot once (64–80 px),
+  day theme once the plan is applied. Entries: "Protected rest" (sage card,
+  moon icon), "Optional", subtle "Estimated" on plan times, notes in an
+  expandable row, gentle rest-window overlap note. Form: Optional /
+  Protected rest checkboxes. Overlaps: a point at an interval's start, or
+  two different points at one moment, no longer count.
+- **Known:** a same-day flight is still one row (departure time; "arrives
+  3:20 PM" in its detail). Saved bookings use `America/New_York` for AUA
+  ends (same clock in October) and the stay checks out 10:00 vs the plan's
+  10:15 — flagged in the preview, not changed.
+- Checks: typecheck, lint, build; `test:plan` 28 (new), `test:authz` 110
+  (9 new: cross-owner, idempotent re-apply, concurrent double apply,
+  unique source, keep / use-plan conflicts, zone opt-in, blocked dates) on
+  disposable Postgres 17 with 0000–0004; itinerary / explore / packing /
+  memories pass; all at TZ Pacific/Kiritimati and Pacific/Pago_Pago.
+  Rendered with fixture data at 1440 / 390 px: no overflow, one mascot, no
+  console errors. Not run signed in (Google sign-in unavailable here).
+
+## Atlas rebrand (2026-10-06)
+
+The app is renamed **rove → Atlas** (UI, metadata, docs, `package.json`).
+Internal identifiers keep their old names on purpose: the `rove-tz`
+cookie, `roveDb`, `[rove]` log prefixes, `rove.invalid`.
+
+- **Mascot:** `public/brand/atlas-mascot.png` (the smiling earth guardian,
+  used as supplied). `src/components/mascot.tsx`: `MascotImage`
+  (`xs`–`hero`, `variant="glow"`, `decorative`), `BrandGlowCard`,
+  `MascotEmptyState` (`card` / `quiet`, `action` or `actionLabel` +
+  `actionHref` / `onAction`), `MascotLoader`. At most one mascot per screen.
+- **Where:** sign-in hero, dashboard first-trip welcome
+  (`first-trip-welcome.tsx`), `/trips` loading, 404, trip not found, app
+  error, setup notice, Explore empty + no matches, Packing empty, Memories
+  empty journal. App icons `src/app/icon.png` / `apple-icon.png` are resized
+  from the mascot (default `favicon.ico` removed). Header mark: forest
+  badge with a gold compass star.
+- **Wordmark:** `ATLAS` in capitals (`Wordmark` in `brand.tsx`) with a gold
+  glint sweeping across every ~7 s and three twinkling sparkles
+  (`.atlas-wordmark`, `.atlas-sparkle`); static under reduced motion, plain
+  text in forced-colors mode. In prose and titles the name is "Atlas".
+- **Dashboard greeting:** the mascot waves beside "Good morning, …" when the
+  traveler has trips (the first-trip welcome card has its own).
+- **Palette** (`globals.css`): ivory `#FAF6EC`, forest `#183A2F`, moss
+  `#4F8F4A` (fills / rings), moss-ink `#3E7A3A` (buttons, links — AA),
+  gold `#F5C451` / gold-soft `#FFE7A3`, earth `#8B6F47`, sage `#A7C957`,
+  info `#5EC3E6`, border `#D9E6C7`, muted text `#666B55` (AA on ivory).
+  Tokens renamed teal → moss, lavender → earth / surface-warm, sun →
+  gold-soft. Coral is kept only as a terracotta for hearts, "Today" and
+  error eyebrows. Also `bg-atlas-*` / `text-atlas-*` names for the palette.
+- Checks: typecheck, lint, build, itinerary / explore / packing / memories
+  tests pass. Rendered with headless Chromium at 1440 and 390 px (sign-in,
+  404, and the real components with sample data on a since-deleted page):
+  no overflow, no broken images, no console errors.
 
 ## Deployment readiness (2026-10-06)
 
@@ -18,8 +170,8 @@ Not deployed yet. Steps: **`docs/vercel-deployment.md`** (target
   `HttpOnly`, `SameSite=Lax`, host-only (no `cookies.domain`).
 - Changes: `engines.node = 22.x` in `package.json`; the `rove-tz` cookie
   is `Secure` on HTTPS.
-- **Migration `0003` is still pending on the Neon `production` branch**
-  (0000–0002 applied; checked read-only). Apply it before the first deploy.
+- Migrations 0000–0004 are applied on the Neon `production` branch
+  (checked 2026-10-06).
 - Checks: typecheck, lint, build, `db:check`, `test:authz` (101, disposable
   Postgres 17, 0000–0003), and the itinerary / explore / packing / memories
   suites pass. `next start` responses for dynamic pages are
@@ -91,7 +243,7 @@ migrations applied, at process zones UTC+14 and UTC−11.
 | ✅ | Trip reflection (`trip_memories`, one row per trip) | Dialog with overall rating (keyboard radios, Clear), summary, favorite moment, would return (Yes / No / Undecided + Clear → not answered), lessons. Explicit Save with pending / success toast / inline error (inputs kept, sign-in link when signed out). |
 | ✅ | Atomic, partial upsert | `saveTripMemory` writes only the given fields via `INSERT … ON CONFLICT (trip_id) DO UPDATE` — the reflection and the album link save separately without erasing each other; concurrent first saves converge on one row. |
 | ✅ | Unsaved changes | `EditDialog`: Esc / X / outside click / Cancel with edits asks "Discard your changes?" (Keep editing returns focus to the form); `beforeunload` warns while dirty; can't close mid-save. Used by every Memories dialog. |
-| ✅ | Photo album | Add / change / remove / open an https link (Zod: https, real domain, no credentials). Shows the service name only; copy says rove can't see inside the album. No uploads, imports, Drive API or new OAuth scopes. Removing the link never touches the album. |
+| ✅ | Photo album | Add / change / remove / open an https link (Zod: https, real domain, no credentials). Shows the service name only; copy says Atlas can't see inside the album. No uploads, imports, Drive API or new OAuth scopes. Removing the link never touches the album. |
 | ✅ | Completed visits | Read from `itinerary_items` (`status = completed`) — never copied. Grouped by day (booking-backed visits dated by their booking), repeat visits stay separate, visits outside the trip dates or undated are listed, not hidden. Each shows time + zone, category (+ place category), stars, reflection, favorite heart, "Add a reflection" when empty, links to Explore place / booking sheet / itinerary day. Cancelled bookings are labelled. |
 | ✅ | Edit in place | Reflection dialog → `saveReflection`; heart → `setItineraryFavorite` (optimistic, reverted with a toast on failure). Same rows as Itinerary and Explore, all revalidated. |
 | ✅ | Favorites | `favoriteVisits` = completed rows with `is_favorite`; the strip and the All / Favorites filter use those same rows (repeat visits show their day). |
@@ -456,9 +608,10 @@ supported); it holds the Neon Auth user ID as text.
 
 ## Next prompt — suggested order
 
-1. **Apply migration 0003** to the database in `.env.local` once you've
-   confirmed which branch it is (`npm run db:migrate`). It's named
-   `production`; consider a separate dev branch for future stages.
+1. **Add Aruba recommendations** from the Explore tab, and **apply the
+   Aruba plan** from the Itinerary tab (preview → Apply).
+   Migrations are current on `production`; consider a separate dev branch
+   for future stages.
 2. **Signed-in smoke test** (`docs/local-setup.md`) of the whole flow in a
    browser: sign in → trip → flight + stay → Itinerary → Explore restaurant →
    schedule → rename → complete with rating → Memories / Explore visited →
@@ -477,7 +630,7 @@ supported); it holds the Neon Auth user ID as text.
 - Travelers are free-text names (no accounts) until household sharing.
 - `@neondatabase/auth` is a beta SDK (pinned to 0.5.0-beta). It depends on
   `@supabase/auth-js` internally (for its optional Supabase-compatible
-  adapter); rove has no direct Supabase dependency.
+  adapter); Atlas has no direct Supabase dependency.
 - A revoked session can stay valid for up to 5 minutes via the signed
   session cache cookie (SDK default `sessionDataTtl`). Sign-out clears it
   immediately in that browser.
@@ -502,5 +655,5 @@ supported); it holds the Neon Auth user ID as text.
   midnight across zones.
 - "Capture a moment" only offers days up to today; future plans are added
   in the Itinerary instead.
-- The album card shows only the link's service name — rove never fetches
+- The album card shows only the link's service name — Atlas never fetches
   it, so there's no preview, photo count or access check.

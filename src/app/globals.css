@@ -3,11 +3,13 @@
 @import "shadcn/tailwind.css";
 
 /*
- * rove design tokens.
- * Starting palette from the brief, with text/button colors adjusted for
- * WCAG AA contrast:
- *   teal text  #007480 (5.5:1 on white; #008C99 is kept for fills/rings)
- *   coral btn  #CC4533 (4.8:1 with white text; #FF705F is decorative only)
+ * atlas design tokens — "a family travel and memory garden".
+ * Brand palette (ivory, forest, moss, gold, earth, sage, sky), with the
+ * text/button shades adjusted for WCAG AA contrast:
+ *   moss button / link text  #3E7A3A (5.2:1 with white; brand moss #4F8F4A
+ *                            is 3.9:1, so it is kept for fills and rings)
+ *   muted text               #666B55 (4.8:1 on ivory; brand #6F755F is 4.4:1)
+ *   gold                     #F5C451 is a fill only; text on it is forest
  */
 @theme inline {
   --color-background: var(--background);
@@ -17,16 +19,40 @@
   --font-serif: var(--font-fraunces);
 
   --color-surface: var(--surface);
-  --color-ink: var(--foreground);
-  --color-teal: var(--teal);
-  --color-teal-ink: var(--teal-ink);
-  --color-teal-soft: var(--teal-soft);
+  --color-surface-warm: var(--surface-warm);
+  --color-ink: var(--forest);
+  --color-forest: var(--forest);
+  --color-moss: var(--moss);
+  --color-moss-ink: var(--moss-ink);
+  --color-moss-hover: var(--moss-hover);
+  --color-moss-soft: var(--moss-soft);
+  --color-sage: var(--sage);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-deep: var(--gold-deep);
+  --color-earth: var(--earth);
+  --color-earth-ink: var(--earth-ink);
+  --color-info: var(--info);
+  --color-info-ink: var(--info-ink);
+  --color-info-soft: var(--info-soft);
   --color-coral: var(--coral);
-  --color-coral-hover: var(--coral-hover);
   --color-coral-bright: var(--coral-bright);
-  --color-sun: var(--sun);
-  --color-lavender: var(--lavender);
-  --color-lavender-ink: var(--lavender-ink);
+
+  /* Brand palette by name: bg-atlas-background, text-atlas-forest, … */
+  --color-atlas-background: var(--background);
+  --color-atlas-surface: var(--surface);
+  --color-atlas-warm: var(--surface-warm);
+  --color-atlas-forest: var(--forest);
+  --color-atlas-moss: var(--moss);
+  --color-atlas-sage: var(--sage);
+  --color-atlas-gold: var(--gold);
+  --color-atlas-gold-soft: var(--gold-soft);
+  --color-atlas-earth: var(--earth);
+  --color-atlas-border: var(--border);
+  --color-atlas-info: var(--info);
+  --color-atlas-text: var(--foreground);
+  --color-atlas-muted: var(--muted-foreground);
 
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -52,39 +78,75 @@
   --radius-2xl: 20px;
   --radius-3xl: 24px;
   --radius-4xl: 28px;
+
+  --animate-mascot-glow: mascot-glow 4.5s ease-in-out infinite;
+  --animate-mascot-breathe: mascot-breathe 4.5s ease-in-out infinite;
+  --animate-mascot-ring: mascot-ring 2.8s ease-out infinite;
 }
 
 :root {
-  --background: #fffcf8;
+  --background: #faf6ec;
   --surface: #ffffff;
-  --foreground: #102f40;
-  --teal: #008c99;
-  --teal-ink: #007480;
-  --teal-soft: #e3f4f5;
-  --coral: #cc4533;
-  --coral-hover: #b93a2b;
-  --coral-bright: #ff705f;
-  --sun: #fff3ca;
-  --lavender: #eee8ff;
-  --lavender-ink: #5b4a9e;
+  --surface-warm: #f3ead7;
+  --foreground: #10251e;
+  --forest: #183a2f;
+  --moss: #4f8f4a;
+  --moss-ink: #3e7a3a;
+  --moss-hover: #31652e;
+  --moss-soft: #edf4e2;
+  --sage: #a7c957;
+  --gold: #f5c451;
+  --gold-soft: #ffe7a3;
+  --gold-ink: #5e4a0c;
+  --gold-deep: #d99f2b;
+  --earth: #8b6f47;
+  --earth-ink: #6e5636;
+  --info: #5ec3e6;
+  --info-ink: #1f6680;
+  --info-soft: #e4f3f9;
+  /* Warm terracotta: favorites, "today", error eyebrows. Not for buttons. */
+  --coral: #b84a32;
+  --coral-bright: #e8825f;
 
   --card: #ffffff;
-  --card-foreground: #102f40;
+  --card-foreground: #10251e;
   --popover: #ffffff;
-  --popover-foreground: #102f40;
-  --primary: #cc4533;
+  --popover-foreground: #10251e;
+  --primary: #3e7a3a;
   --primary-foreground: #ffffff;
-  --secondary: #f3f6f7;
-  --secondary-foreground: #102f40;
-  --muted: #f3f6f7;
-  --muted-foreground: #5d6d79;
-  --accent: #e3f4f5;
-  --accent-foreground: #102f40;
+  --secondary: #f3eee1;
+  --secondary-foreground: #183a2f;
+  --muted: #f3eee1;
+  --muted-foreground: #666b55;
+  --accent: #edf4e2;
+  --accent-foreground: #183a2f;
   --destructive: #b42318;
-  --border: #e6ebed;
-  --input: #d9e1e4;
-  --ring: #008c99;
+  --border: #d9e6c7;
+  --input: #c9d8b4;
+  --ring: #4f8f4a;
   --radius: 12px;
+}
+
+@keyframes atlas-shimmer {
+  0% { background-position: 120% 0; }
+  45%, 100% { background-position: -20% 0; }
+}
+@keyframes atlas-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  15% { opacity: 1; transform: scale(1) rotate(45deg); }
+  30% { opacity: 0; transform: scale(0.3) rotate(90deg); }
+}
+@keyframes mascot-glow {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 0.9; transform: scale(1.04); }
+}
+@keyframes mascot-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.012); }
+}
+@keyframes mascot-ring {
+  0% { opacity: 0.5; transform: scale(0.85); }
+  100% { opacity: 0; transform: scale(1.25); }
 }
 
 @layer base {
@@ -119,9 +181,51 @@
     @apply text-[0.6875rem] font-semibold tracking-[0.16em] uppercase;
   }
   .card-surface {
-    @apply rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(16,47,64,0.04),0_8px_24px_-12px_rgba(16,47,64,0.08)];
+    @apply rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(24,58,47,0.04),0_10px_28px_-14px_rgba(24,58,47,0.12)];
+  }
+  /* Wordmark: forest letters with a gold glint sweeping across every few seconds. */
+  .atlas-wordmark {
+    background-image: linear-gradient(
+      105deg,
+      var(--forest) 0%,
+      var(--forest) 40%,
+      #c9952e 46%,
+      var(--gold) 49%,
+      #fff6d6 51%,
+      var(--gold) 53%,
+      #c9952e 56%,
+      var(--forest) 62%,
+      var(--forest) 100%
+    );
+    background-size: 250% 100%;
+    background-position: -20% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: atlas-shimmer 7s ease-in-out 0.6s infinite;
+  }
+  .atlas-sparkle {
+    opacity: 0;
+    filter: drop-shadow(0 0 2px rgb(245 196 81 / 0.9));
+    pointer-events: none;
+    animation: atlas-twinkle 3.3s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atlas-wordmark { animation: none; }
+    .atlas-sparkle { animation: none; opacity: 0.85; }
+  }
+  @media (forced-colors: active) {
+    .atlas-wordmark { background: none; color: CanvasText; }
+    .atlas-sparkle { display: none; }
+  }
+  /* Hero / mascot card: white surface, soft green border, golden glow. */
+  .brand-glow-card {
+    @apply relative isolate overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_1px_2px_rgba(24,58,47,0.04),0_24px_60px_-28px_rgba(139,111,71,0.35)];
+    background-image:
+      radial-gradient(120% 80% at 50% 0%, rgb(255 231 163 / 0.45), transparent 60%),
+      radial-gradient(90% 70% at 100% 100%, rgb(167 201 87 / 0.18), transparent 70%);
   }
   .focus-ring {
-    @apply outline-none focus-visible:ring-3 focus-visible:ring-teal/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+    @apply outline-none focus-visible:ring-3 focus-visible:ring-moss/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 }

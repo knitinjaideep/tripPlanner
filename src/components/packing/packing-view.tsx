@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import { MascotImage } from "@/components/mascot";
 import { toast } from "sonner";
 import {
   deletePackingItem,
@@ -56,7 +57,7 @@ import { PackingCategoryForm, PackingItemForm } from "./packing-forms";
 import { usePackedToggles } from "./use-packed-toggles";
 
 const addButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(204,69,51,0.7)] transition-colors hover:bg-coral-hover";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(62,122,58,0.55)] transition-colors hover:bg-moss-hover";
 const ghostButton =
   "focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-4 text-[0.9375rem] font-semibold text-ink transition-colors hover:bg-secondary";
 const iconButton =
@@ -297,7 +298,7 @@ export function PackingView({
                 <button
                   type="button"
                   onClick={() => setCategoryDialog({ open: true })}
-                  className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60"
+                  className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
                 >
                   <Plus className="size-4" aria-hidden="true" /> Add category
                 </button>
@@ -362,7 +363,7 @@ export function PackingView({
                     className={cn(
                       controlClass,
                       "w-full appearance-none border pr-9 font-medium sm:w-auto",
-                      traveler && "border-teal bg-teal-soft/50 text-teal-ink",
+                      traveler && "border-moss bg-moss-soft/50 text-moss-ink",
                     )}
                   >
                     <option value="">Everyone</option>
@@ -389,7 +390,7 @@ export function PackingView({
                     setShow("all");
                     setTraveler("");
                   }}
-                  className="focus-ring mt-3 inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60"
+                  className="focus-ring mt-3 inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
                 >
                   Show all items
                 </button>
@@ -519,7 +520,7 @@ function ProgressBar({ percent, className }: { percent: number; className?: stri
   return (
     <span className={cn("block h-2 overflow-hidden rounded-full bg-secondary", className)} aria-hidden="true">
       <span
-        className={cn("block h-full rounded-full transition-[width] duration-300", percent === 100 ? "bg-teal" : "bg-teal-ink")}
+        className={cn("block h-full rounded-full transition-[width] duration-300", percent === 100 ? "bg-moss" : "bg-moss-ink")}
         style={{ width: `${percent}%` }}
       />
     </span>
@@ -570,7 +571,7 @@ function CategoryNavItem({
           </span>
         )}
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className={cn("text-xs tabular-nums", p.total > 0 && p.remaining === 0 ? "text-teal-ink" : "text-muted-foreground")}>
+        <span className={cn("text-xs tabular-nums", p.total > 0 && p.remaining === 0 ? "text-moss-ink" : "text-muted-foreground")}>
           {p.packed}/{p.total}
           <span className="sr-only"> packed</span>
         </span>
@@ -619,7 +620,7 @@ function CategorySection({
         <h3 id={headingId} className="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
           {category.name}
         </h3>
-        <span className={cn("text-sm tabular-nums", p.total > 0 && p.remaining === 0 ? "font-semibold text-teal-ink" : "text-muted-foreground")}>
+        <span className={cn("text-sm tabular-nums", p.total > 0 && p.remaining === 0 ? "font-semibold text-moss-ink" : "text-muted-foreground")}>
           {p.packed}/{p.total}
           <span className="sr-only"> packed</span>
         </span>
@@ -682,7 +683,7 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
           checked={item.is_packed}
           onChange={(e) => actions.setPacked(item.id, e.target.checked)}
           aria-describedby={notesId}
-          className="mt-0.5 size-5 shrink-0 cursor-pointer accent-[#007480]"
+          className="mt-0.5 size-5 shrink-0 cursor-pointer accent-moss-ink"
         />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -696,7 +697,7 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
               </span>
             ) : null}
             {item.traveler_name ? (
-              <span className="rounded-full bg-lavender px-2 py-0.5 text-xs font-medium text-lavender-ink">
+              <span className="rounded-full bg-surface-warm px-2 py-0.5 text-xs font-medium text-earth-ink">
                 <span className="sr-only">, for </span>
                 {item.traveler_name}
               </span>
@@ -818,7 +819,7 @@ function QuickAdd({ tripId, category }: { tripId: string; category: PackingCateg
           type="submit"
           disabled={pending || !value.trim()}
           aria-label={`Add to ${category.name}`}
-          className="focus-ring grid size-11 shrink-0 place-items-center rounded-xl bg-teal-soft text-teal-ink transition-colors hover:bg-[#cfeaec] disabled:opacity-50"
+          className="focus-ring grid size-11 shrink-0 place-items-center rounded-xl bg-moss-soft text-moss-ink transition-colors hover:bg-[#dce9c9] disabled:opacity-50"
         >
           {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
         </button>
@@ -852,14 +853,14 @@ function StillToPack({
 
   return (
     <aside aria-label="Still to pack" className="hidden xl:block">
-      <div className="sticky top-4 rounded-2xl bg-sun p-5">
-        <p className="eyebrow text-[#6b5200]">Still to pack</p>
+      <div className="sticky top-4 rounded-2xl bg-gold-soft p-5">
+        <p className="eyebrow text-gold-ink">Still to pack</p>
         <p className="font-display mt-2 text-3xl font-semibold text-ink">{left.length === 0 ? "All packed" : left.length}</p>
         {left.length === 0 ? (
-          <p className="mt-1 text-sm text-[#5a4a10]">Every item is checked off.</p>
+          <p className="mt-1 text-sm text-gold-ink">Every item is checked off.</p>
         ) : (
           <>
-            <p className="text-sm text-[#5a4a10]">{left.length === 1 ? "item left" : "items left"}</p>
+            <p className="text-sm text-gold-ink">{left.length === 1 ? "item left" : "items left"}</p>
             <ul className="mt-4 space-y-0.5">
               {byCategory.map(({ c, n }) => (
                 <li key={c.id}>
@@ -875,8 +876,8 @@ function StillToPack({
               ))}
             </ul>
             {byTraveler.length > 0 ? (
-              <div className="mt-4 border-t border-[#e8d9a0] pt-3">
-                <p className="px-2 text-xs font-semibold tracking-wide text-[#6b5200] uppercase">By traveler</p>
+              <div className="mt-4 border-t border-gold/60 pt-3">
+                <p className="px-2 text-xs font-semibold tracking-wide text-gold-ink uppercase">By traveler</p>
                 <ul className="mt-1 space-y-0.5 text-sm text-ink">
                   {byTraveler.map((t) => (
                     <li key={t.name} className="flex justify-between px-2 py-1">
@@ -885,7 +886,7 @@ function StillToPack({
                     </li>
                   ))}
                   {unassigned ? (
-                    <li className="flex justify-between px-2 py-1 text-[#5a4a10]">
+                    <li className="flex justify-between px-2 py-1 text-gold-ink">
                       <span>Not assigned</span>
                       <span className="font-semibold tabular-nums">{unassigned}</span>
                     </li>
@@ -921,27 +922,25 @@ function EmptyState({
   onCopy: () => void;
 }) {
   const option =
-    "focus-ring flex h-full w-full flex-col items-start gap-2 rounded-2xl border border-border bg-white p-5 text-left transition-colors hover:border-teal hover:bg-teal-soft/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-white";
+    "focus-ring flex h-full w-full flex-col items-start gap-2 rounded-2xl border border-border bg-white p-5 text-left transition-colors hover:border-moss hover:bg-moss-soft/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-white";
   return (
     <div className="card-surface px-5 py-8 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-xl text-center">
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#d9f1f3] to-[#fff3ca] text-teal-ink">
-          <Luggage className="size-7" aria-hidden="true" />
-        </span>
+        <MascotImage size="md" decorative className="mx-auto" />
         <h3 className="font-display mt-4 text-2xl font-semibold text-ink">Start your packing list</h3>
         <p className="mt-2 text-muted-foreground">Pick a starting point. Nothing is added until you choose.</p>
       </div>
       <ul className="mx-auto mt-8 grid max-w-3xl gap-3 sm:grid-cols-3">
         <li>
           <button type="button" className={option} onClick={onStarter}>
-            <ListChecks className="size-5 text-teal-ink" aria-hidden="true" />
+            <ListChecks className="size-5 text-moss-ink" aria-hidden="true" />
             <span className="font-semibold text-ink">Use a starter checklist</span>
             <span className="text-sm text-muted-foreground">Essentials, clothes, toiletries, baby, beach and electronics — pick what fits.</span>
           </button>
         </li>
         <li>
           <button type="button" className={option} onClick={onCopy} disabled={!copyAvailable}>
-            <CopyPlus className="size-5 text-teal-ink" aria-hidden="true" />
+            <CopyPlus className="size-5 text-moss-ink" aria-hidden="true" />
             <span className="font-semibold text-ink">Copy from another trip</span>
             <span className="text-sm text-muted-foreground">
               {copyAvailable
@@ -954,7 +953,7 @@ function EmptyState({
         </li>
         <li>
           <button type="button" className={option} onClick={onEmpty}>
-            <Plus className="size-5 text-teal-ink" aria-hidden="true" />
+            <Plus className="size-5 text-moss-ink" aria-hidden="true" />
             <span className="font-semibold text-ink">Start an empty list</span>
             <span className="text-sm text-muted-foreground">Name a first category and add your own items.</span>
           </button>

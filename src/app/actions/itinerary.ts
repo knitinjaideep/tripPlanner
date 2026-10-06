@@ -38,6 +38,8 @@ const ITEM_FIELDS = [
   "local_end_time",
   "timezone",
   "planning_notes",
+  "is_optional",
+  "is_protected_rest",
 ] as const;
 
 const REVIEW_FIELDS = ["status", "rating", "reflection", "is_favorite"] as const;

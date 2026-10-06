@@ -100,7 +100,7 @@ export function ItineraryForm(props: Props) {
                     onChange={() => setMode(m.value)}
                     className="peer sr-only"
                   />
-                  <span className="flex min-h-11 items-center justify-center rounded-lg px-2 text-center text-sm font-semibold text-muted-foreground transition-colors peer-checked:bg-white peer-checked:text-ink peer-checked:shadow-sm peer-focus-visible:ring-3 peer-focus-visible:ring-teal/40">
+                  <span className="flex min-h-11 items-center justify-center rounded-lg px-2 text-center text-sm font-semibold text-muted-foreground transition-colors peer-checked:bg-white peer-checked:text-ink peer-checked:shadow-sm peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
                     {m.label}
                   </span>
                 </label>
@@ -167,7 +167,7 @@ function ActivityFields({ item, errors, ...props }: FieldProps) {
                   onChange={() => setCategory(c)}
                   className="peer sr-only"
                 />
-                <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-3.5 text-sm font-medium text-ink transition-colors peer-checked:border-teal peer-checked:bg-teal-soft peer-checked:text-teal-ink peer-focus-visible:ring-3 peer-focus-visible:ring-teal/40">
+                <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-3.5 text-sm font-medium text-ink transition-colors peer-checked:border-moss peer-checked:bg-moss-soft peer-checked:text-moss-ink peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
                   <Icon className="size-4" aria-hidden="true" />
                   {LABELS.itineraryCategory[c]}
                 </span>
@@ -191,9 +191,11 @@ function ActivityFields({ item, errors, ...props }: FieldProps) {
         placeholder="Tickets at the door, bring reef-safe sunscreen…"
       />
 
+      <PlanFlags item={item} />
+
       {canSaveToExplore ? (
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-input bg-white p-3.5">
-          <input type="checkbox" name="save_to_explore" className="mt-0.5 size-5 shrink-0 accent-teal" />
+          <input type="checkbox" name="save_to_explore" className="mt-0.5 size-5 shrink-0 accent-moss" />
           <span>
             <span className="block text-sm font-semibold text-ink">Also save to Explore</span>
             <span className="block text-sm text-muted-foreground">
@@ -244,8 +246,8 @@ function PlaceFields({ item, places, errors, ...props }: FieldProps) {
         hint={place && place.visit_count > 0 && place.id !== item?.place_id ? "Already on your itinerary — this adds another visit." : undefined}
       />
       {place ? (
-        <div className="flex items-start gap-3 rounded-2xl bg-teal-soft/60 p-4">
-          <MapPin className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-2xl bg-moss-soft/60 p-4">
+          <MapPin className="mt-0.5 size-4 shrink-0 text-moss-ink" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-ink">{place.name}</p>
             <p className="text-sm text-muted-foreground">
@@ -255,7 +257,7 @@ function PlaceFields({ item, places, errors, ...props }: FieldProps) {
               href={placeMapsUrl(place)}
               target="_blank"
               rel="noopener noreferrer"
-              className="focus-ring mt-1 inline-flex min-h-9 items-center gap-1.5 rounded text-sm font-semibold text-teal-ink hover:underline"
+              className="focus-ring mt-1 inline-flex min-h-9 items-center gap-1.5 rounded text-sm font-semibold text-moss-ink hover:underline"
             >
               Open in Maps <ExternalLink className="size-3.5" aria-hidden="true" />
               <span className="sr-only">(opens in a new tab)</span>
@@ -276,6 +278,8 @@ function PlaceFields({ item, places, errors, ...props }: FieldProps) {
         maxLength={5000}
         placeholder="Go early for the light, try the pastechi…"
       />
+
+      <PlanFlags item={item} />
     </>
   );
 }
@@ -339,7 +343,7 @@ function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, 
               <button
                 type="button"
                 onClick={() => openBooking(booking.id)}
-                className="focus-ring mt-2 -ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60"
+                className="focus-ring mt-2 -ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
               >
                 <Pencil className="size-3.5" aria-hidden="true" /> Edit booking details
               </button>
@@ -370,7 +374,7 @@ function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, 
                 <button
                   type="button"
                   onClick={() => openBooking(b.id)}
-                  className="focus-ring inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 font-semibold text-teal-ink hover:bg-white"
+                  className="focus-ring inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 font-semibold text-moss-ink hover:bg-white"
                 >
                   Add a date
                 </button>
@@ -380,6 +384,37 @@ function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, 
         </div>
       ) : null}
     </>
+  );
+}
+
+/* ------------------------------ flags ------------------------------- */
+
+function PlanFlags({ item }: { item?: ItineraryEntry | null }) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-1.5 text-sm font-semibold text-ink">
+        Planning <span className="font-normal text-muted-foreground">(optional)</span>
+      </legend>
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
+        <input type="checkbox" name="is_optional" defaultChecked={item?.is_optional ?? false} className="mt-0.5 size-5 shrink-0 accent-moss" />
+        <span>
+          <span className="font-medium">Optional</span>
+          <span className="block text-muted-foreground">Fine to shorten or skip on the day.</span>
+        </span>
+      </label>
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
+        <input
+          type="checkbox"
+          name="is_protected_rest"
+          defaultChecked={item?.is_protected_rest ?? false}
+          className="mt-0.5 size-5 shrink-0 accent-moss"
+        />
+        <span>
+          <span className="font-medium">Protected rest</span>
+          <span className="block text-muted-foreground">Keep this window free of outings — overlaps get a gentle note.</span>
+        </span>
+      </label>
+    </fieldset>
   );
 }
 

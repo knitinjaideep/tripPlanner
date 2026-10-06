@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 import { PackingCategoryIcon } from "./category-icon";
 
 const primaryButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-coral-hover disabled:cursor-not-allowed disabled:opacity-60";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-moss-hover disabled:cursor-not-allowed disabled:opacity-60";
 
-const checkbox = "mt-0.5 size-5 shrink-0 accent-[#007480]";
+const checkbox = "mt-0.5 size-5 shrink-0 accent-moss-ink";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -58,8 +58,8 @@ function Footer({ children }: { children: React.ReactNode }) {
 
 function MergeNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex gap-2.5 rounded-xl bg-teal-soft/70 p-3.5 text-sm text-ink">
-      <Info className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+    <p className="flex gap-2.5 rounded-xl bg-moss-soft/70 p-3.5 text-sm text-ink">
+      <Info className="mt-0.5 size-4 shrink-0 text-moss-ink" aria-hidden="true" />
       <span>{children}</span>
     </p>
   );
@@ -169,7 +169,7 @@ function StarterBody({
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-baseline justify-between gap-x-3">
                         <span className="font-semibold text-ink">{c.name}</span>
-                        <span className={cn("text-xs", one.addedItems === 0 ? "text-muted-foreground" : "text-teal-ink")}>
+                        <span className={cn("text-xs", one.addedItems === 0 ? "text-muted-foreground" : "text-moss-ink")}>
                           {status}
                         </span>
                       </span>
@@ -377,7 +377,7 @@ function CopyBody({
               <legend className="text-sm font-semibold text-ink">2. Choose categories from {source!.title}</legend>
               <button
                 type="button"
-                className="focus-ring min-h-11 rounded-lg px-2 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60"
+                className="focus-ring min-h-11 rounded-lg px-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
                 onClick={() => setSelected(all ? new Set() : new Set(copyable.map((c) => c.id)))}
               >
                 {all ? "Select none" : "Select all"}
@@ -562,7 +562,7 @@ function DeleteCategoryBody({
           className={cn(
             "flex items-start gap-3 rounded-xl border p-3.5",
             others.length ? "cursor-pointer" : "cursor-not-allowed opacity-60",
-            mode === "move" ? "border-teal bg-teal-soft/40" : "border-border bg-white",
+            mode === "move" ? "border-moss bg-moss-soft/40" : "border-border bg-white",
           )}
         >
           <input
@@ -583,7 +583,7 @@ function DeleteCategoryBody({
                   setTarget(e.target.value);
                   setMode("move");
                 }}
-                className="h-11 w-full rounded-[10px] border border-input bg-white px-3 text-[0.9375rem] text-ink focus-visible:border-teal focus-visible:ring-3 focus-visible:ring-teal/25 focus-visible:outline-none"
+                className="h-11 w-full rounded-[10px] border border-input bg-white px-3 text-[0.9375rem] text-ink focus-visible:border-moss focus-visible:ring-3 focus-visible:ring-moss/25 focus-visible:outline-none"
               >
                 {others.map((o) => (
                   <option key={o.id} value={o.id}>

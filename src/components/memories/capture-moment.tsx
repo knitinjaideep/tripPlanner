@@ -153,11 +153,11 @@ function ModeOption({
   return (
     <label
       className={cn(
-        "flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border border-input bg-white p-3 has-[:checked]:border-teal has-[:checked]:bg-teal-soft/60 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-teal/40",
+        "flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border border-input bg-white p-3 has-[:checked]:border-moss has-[:checked]:bg-moss-soft/60 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-moss/40",
         disabled && "cursor-not-allowed opacity-60",
       )}
     >
-      <input type="radio" name="capture_mode" checked={checked} disabled={disabled} onChange={onSelect} className="mt-1 size-4 accent-teal" />
+      <input type="radio" name="capture_mode" checked={checked} disabled={disabled} onChange={onSelect} className="mt-1 size-4 accent-moss" />
       <span>
         <span className="block text-sm font-semibold text-ink">{title}</span>
         <span className="block text-sm text-muted-foreground">{detail}</span>
@@ -248,7 +248,7 @@ function ExistingForm({ tripId, candidates, days, onDirty, onPending, onDone, on
           aria-invalid={state.fieldErrors?.entry ? true : undefined}
           aria-describedby="capture-entry-hint"
           onChange={(e) => setKey(e.target.value)}
-          className="h-11 w-full rounded-[10px] border border-input bg-white px-3.5 text-[0.9375rem] text-ink focus-visible:border-teal focus-visible:ring-3 focus-visible:ring-teal/25 focus-visible:outline-none"
+          className="h-11 w-full rounded-[10px] border border-input bg-white px-3.5 text-[0.9375rem] text-ink focus-visible:border-moss focus-visible:ring-3 focus-visible:ring-moss/25 focus-visible:outline-none"
         >
           <option value="">Choose from your itinerary…</option>
           {[...byDay.entries()].map(([date, list]) => (
@@ -323,7 +323,7 @@ function NewForm({ tripId, days, onDirty, onPending, onDone, onCancel }: FormPro
       <ReviewFields prefix="capture-new" onDirty={onDirty} error={errors.reflection} />
       {explore ? (
         <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
-          <input type="checkbox" name="save_to_explore" className="mt-0.5 size-5 accent-teal" />
+          <input type="checkbox" name="save_to_explore" className="mt-0.5 size-5 accent-moss" />
           <span>
             <span className="font-medium">Also save to Explore</span>
             <span className="block text-muted-foreground">

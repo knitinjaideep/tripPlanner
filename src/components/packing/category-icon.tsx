@@ -51,7 +51,7 @@ const iconKey = (name: string) => RULES.find(([re]) => re.test(normalizeName(nam
 export function PackingCategoryIcon({ name, className }: { name: string; className?: string }) {
   const Icon = ICONS[iconKey(name)];
   return (
-    <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg bg-teal-soft text-teal-ink", className)}>
+    <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg bg-moss-soft text-moss-ink", className)}>
       <Icon className="size-4" aria-hidden="true" />
     </span>
   );

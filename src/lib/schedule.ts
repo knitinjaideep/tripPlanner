@@ -310,13 +310,17 @@ export function splitDay(entries: AgendaEntry[]) {
   return { timed: entries.filter((e) => e.time), flexible: entries.filter((e) => !e.time) };
 }
 
+export type OverlapDetail = { title: string; protectedRest: boolean };
+
 /**
- * Gentle overlap hints for a day's timed entries: key → titles it overlaps.
+ * Gentle overlap hints for a day's timed entries: key → what it overlaps.
  * Entries with an end are intervals, others points. Stays, skipped and
- * cancelled entries are ignored. Never blocks anything.
+ * cancelled entries are ignored. A point at the very start of an interval
+ * (landing → arrival processing) is a sequence, not a clash, and two points
+ * at the same moment only clash when they're the same thing. Never blocks.
  */
-export function findOverlaps(entries: AgendaEntry[]) {
-  type Span = { key: string; title: string; start: number; end: number | null };
+export function findOverlapDetails(entries: AgendaEntry[]) {
+  type Span = { key: string; title: string; start: number; end: number | null; rest: boolean };
   const spans: Span[] = [];
   for (const e of entries) {
     if (!e.time || e.cancelled || e.item?.status === "skipped" || e.reservation?.kind === "lodging") continue;
@@ -327,24 +331,32 @@ export function findOverlaps(entries: AgendaEntry[]) {
       end = zonedInstant(e.schedule.endDate ?? e.date, e.schedule.endTime, e.schedule.endTimeZone);
       if (end !== null && end <= start) end = null;
     }
-    spans.push({ key: e.key, title: agendaTitle(e), start, end });
+    spans.push({ key: e.key, title: agendaTitle(e), start, end, rest: Boolean(e.item?.is_protected_rest) });
   }
-  const overlaps = new Map<string, string[]>();
-  const add = (a: Span, b: Span) => overlaps.set(a.key, [...(overlaps.get(a.key) ?? []), b.title]);
+  const overlaps = new Map<string, OverlapDetail[]>();
+  const add = (a: Span, b: Span) =>
+    overlaps.set(a.key, [...(overlaps.get(a.key) ?? []), { title: b.title, protectedRest: b.rest }]);
+  const clash = (a: Span, b: Span) => {
+    if (a.end !== null && b.end !== null) return a.start < b.end && b.start < a.end;
+    if (a.end === null && b.end === null) return a.start === b.start && a.title.toLowerCase() === b.title.toLowerCase();
+    const [point, span] = a.end === null ? [a, b] : [b, a];
+    // Strictly inside: the interval's own start and end are boundaries.
+    return point.start > span.start && point.start < span.end!;
+  };
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
-      const a = spans[i];
-      const b = spans[j];
-      const aEnd = a.end ?? a.start;
-      const bEnd = b.end ?? b.start;
-      // Same start, or one starts strictly inside the other.
-      if (a.start === b.start || (a.start < bEnd && b.start < aEnd)) {
-        add(a, b);
-        add(b, a);
+      if (clash(spans[i], spans[j])) {
+        add(spans[i], spans[j]);
+        add(spans[j], spans[i]);
       }
     }
   }
   return overlaps;
+}
+
+/** Overlap hints as titles only. */
+export function findOverlaps(entries: AgendaEntry[]) {
+  return new Map([...findOverlapDetails(entries)].map(([key, list]) => [key, list.map((o) => o.title)]));
 }
 
 /** Itinerary default: today (in the trip's zone) while the trip is on, else the first day. */

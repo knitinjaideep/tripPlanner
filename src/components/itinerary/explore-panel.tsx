@@ -50,20 +50,20 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
     });
 
   return (
-    <section aria-labelledby="explore-heading" className="rounded-2xl bg-teal-soft/70 p-5">
+    <section aria-labelledby="explore-heading" className="rounded-2xl bg-moss-soft/70 p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="explore-heading" className="eyebrow flex items-center gap-2 text-teal-ink">
+        <h2 id="explore-heading" className="eyebrow flex items-center gap-2 text-moss-ink">
           <Compass className="size-4" aria-hidden="true" /> From Explore
         </h2>
         {unscheduled.length > 0 ? (
-          <span className="text-xs font-medium text-teal-ink/80">{unscheduled.length} not scheduled</span>
+          <span className="text-xs font-medium text-moss-ink/80">{unscheduled.length} not scheduled</span>
         ) : null}
       </div>
 
       {places.length === 0 ? (
         <p className="mt-3 rounded-xl bg-white/80 p-4 text-sm text-muted-foreground">
           Places you save in{" "}
-          <Link href={`/trips/${tripId}/explore`} className="font-semibold text-teal-ink underline-offset-2 hover:underline">
+          <Link href={`/trips/${tripId}/explore`} className="font-semibold text-moss-ink underline-offset-2 hover:underline">
             Explore
           </Link>{" "}
           show up here, ready to drop into a day.
@@ -82,7 +82,7 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
                 disabled={busyId === p.id}
                 aria-busy={busyId === p.id}
                 aria-label={`Add ${p.name} to ${dayLabel}`}
-                className="focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-teal-ink hover:bg-teal-soft disabled:opacity-60"
+                className="focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft disabled:opacity-60"
               >
                 {busyId === p.id ? (
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -99,7 +99,7 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="focus-ring mt-2 min-h-11 rounded-lg px-1 text-sm font-semibold text-teal-ink"
+          className="focus-ring mt-2 min-h-11 rounded-lg px-1 text-sm font-semibold text-moss-ink"
         >
           {showAll ? "Show fewer" : `Show all ${unscheduled.length}`}
         </button>
@@ -108,18 +108,18 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
       {places.length > 0 ? (
         <Link
           href={`/trips/${tripId}/explore`}
-          className="focus-ring mt-1 inline-flex min-h-11 items-center rounded-lg px-1 text-sm font-semibold text-teal-ink"
+          className="focus-ring mt-1 inline-flex min-h-11 items-center rounded-lg px-1 text-sm font-semibold text-moss-ink"
         >
           Open Explore
         </Link>
       ) : null}
       {scheduled.length > 0 ? (
-        <div className="mt-1 border-t border-teal/15 pt-2">
+        <div className="mt-1 border-t border-moss/15 pt-2">
           <button
             type="button"
             onClick={() => setShowScheduled((v) => !v)}
             aria-expanded={showScheduled}
-            className="focus-ring min-h-11 rounded-lg px-1 text-sm font-semibold text-teal-ink"
+            className="focus-ring min-h-11 rounded-lg px-1 text-sm font-semibold text-moss-ink"
           >
             {showScheduled ? "Hide scheduled places" : `Already scheduled (${scheduled.length})`}
           </button>
@@ -166,7 +166,7 @@ function PlaceRow({ place, note, children }: { place: ExplorePlace; note?: strin
       <span
         className={cn(
           "grid size-8 shrink-0 place-items-center rounded-full",
-          place.kind === "food" ? "bg-[#ffe9e4] text-[#a33a2b]" : "bg-teal-soft text-teal-ink",
+          place.kind === "food" ? "bg-[#ffe9e4] text-[#a33a2b]" : "bg-moss-soft text-moss-ink",
         )}
       >
         <Icon className="size-4" aria-hidden="true" />
@@ -215,7 +215,7 @@ function RepeatDialog({
             disabled={busy}
             aria-busy={busy}
             onClick={onConfirm}
-            className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white hover:bg-coral-hover disabled:opacity-70"
+            className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-moss-hover disabled:opacity-70"
           >
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
             {busy ? "Adding…" : "Add another visit"}

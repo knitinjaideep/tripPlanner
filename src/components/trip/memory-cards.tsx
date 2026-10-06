@@ -8,9 +8,9 @@ import type { ItineraryEntry, TripMemory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const linkButton =
-  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 -mr-2 text-sm font-semibold text-teal-ink hover:bg-teal-soft/60";
+  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 -mr-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60";
 const outlineButton =
-  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-teal-ink px-5 text-[0.9375rem] font-semibold text-teal-ink transition-colors hover:bg-teal-soft";
+  "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] border-moss-ink px-5 text-[0.9375rem] font-semibold text-moss-ink transition-colors hover:bg-moss-soft";
 
 /** Overview during the trip: what's been captured, and a quick way to add a moment. */
 export function MomentsCard({
@@ -32,7 +32,7 @@ export function MomentsCard({
     <article className={cn("card-surface flex flex-col p-6 md:col-span-2", className)}>
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow flex items-center gap-2 text-ink">
-          <Images className="size-4 text-teal" aria-hidden="true" /> Memories
+          <Images className="size-4 text-moss" aria-hidden="true" /> Memories
         </p>
         <Link href={href} className={linkButton}>
           Open journal <ArrowRight className="size-4" aria-hidden="true" />
@@ -78,7 +78,7 @@ export function TripMemoryCard({
     <article className={cn("card-surface flex flex-col p-6 sm:p-7 md:col-span-2", className)}>
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow flex items-center gap-2 text-ink">
-          <Images className="size-4 text-teal" aria-hidden="true" /> Trip memories
+          <Images className="size-4 text-moss" aria-hidden="true" /> Trip memories
         </p>
         <Link href={href} className={linkButton}>
           Open memories <ArrowRight className="size-4" aria-hidden="true" />
@@ -128,13 +128,13 @@ export function TripMemoryCard({
             href={memory.photo_album_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-lavender-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-[#4a3b86]"
+            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-earth-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-[#5a462b]"
           >
             Open photo album <ExternalLink className="size-4" aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         ) : (
-          <Link href={href} className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-lavender-ink">
+          <Link href={href} className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-earth-ink">
             <Images className="size-4" aria-hidden="true" /> Add your photo album link
           </Link>
         )}

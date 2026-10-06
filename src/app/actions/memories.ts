@@ -51,7 +51,7 @@ export async function saveTripAlbum(tripId: string, _prev: ActionState, formData
   return result;
 }
 
-/** Forget the album link (the album itself is not touched — rove never had access to it). */
+/** Forget the album link (the album itself is not touched — Atlas never had access to it). */
 export async function removeTripAlbum(tripId: string): Promise<ActionState> {
   const result = await guarded("removeTripAlbum", async () =>
     (await saveTripMemoryForUser(tripId, { photo_album_url: null }))

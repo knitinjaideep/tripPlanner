@@ -1,5 +1,5 @@
 {
-  "name": "rove",
+  "name": "atlas",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -18,7 +18,9 @@
     "test:itinerary": "tsx scripts/test-itinerary.ts",
     "test:explore": "tsx scripts/test-explore.ts",
     "test:packing": "tsx scripts/test-packing.ts",
-    "test:memories": "tsx scripts/test-memories.ts"
+    "test:memories": "tsx scripts/test-memories.ts",
+    "test:plan": "tsx scripts/test-plan.ts",
+    "test:recommendations": "tsx scripts/test-recommendations.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.3",

@@ -16,12 +16,12 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: { default: "rove", template: "%s · rove" },
+  title: { default: "Atlas", template: "%s · Atlas" },
   description: "A calm, beautiful home for every trip you take.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fffcf8",
+  themeColor: "#faf6ec",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

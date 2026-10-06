@@ -7,11 +7,13 @@ import {
   Ban,
   CalendarArrowUp,
   Check,
+  ChevronDown,
   CircleDashed,
   Copy,
   ExternalLink,
   Heart,
   Loader2,
+  Moon,
   MoreHorizontal,
   NotebookPen,
   Pencil,
@@ -42,7 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { entryClock, entryDetail, entryLabel, placeMapsUrl } from "@/lib/itinerary-format";
 import type { ItineraryStatus } from "@/lib/plan-options";
-import { agendaCategory, agendaTitle, type AgendaEntry } from "@/lib/schedule";
+import { agendaCategory, agendaTitle, type AgendaEntry, type OverlapDetail } from "@/lib/schedule";
 import type { ActionState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CATEGORY_STYLE, CategoryIcon } from "./category-icon";
@@ -59,7 +61,7 @@ export type ReorderControls = {
 type Props = {
   entry: AgendaEntry;
   variant: "timed" | "flexible" | "outside";
-  overlaps?: string[];
+  overlaps?: OverlapDetail[];
   reorder?: ReorderControls;
 };
 
@@ -87,6 +89,13 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
   const detail = entryDetail(entry);
   const clock = entryClock(entry);
   const hasReview = Boolean(item && (item.rating || item.reflection));
+  const protectedRest = Boolean(item?.is_protected_rest && !reservation);
+  // Plan-written times are planning estimates (bookings carry real times).
+  const estimated = Boolean(item?.source_key && !reservation && entry.time);
+  const restClash = !protectedRest ? overlaps?.filter((o) => o.protectedRest) ?? [] : [];
+  // On the rest block itself, what's planned inside it is a gentle note, not a warning.
+  const insideRest = protectedRest ? overlaps ?? [] : [];
+  const otherClash = protectedRest ? [] : overlaps?.filter((o) => !o.protectedRest) ?? [];
 
   const run = (action: () => Promise<ActionState & { itemId?: string }>, after?: (r: ActionState & { itemId?: string }) => void) =>
     startTransition(async () => {
@@ -131,13 +140,13 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
       title={status === "completed" ? "Done — tap to undo" : "Mark as done"}
       className={cn(
         "focus-ring grid size-11 shrink-0 place-items-center rounded-full transition-colors",
-        status === "completed" ? "text-white" : "text-muted-foreground hover:text-teal-ink",
+        status === "completed" ? "text-white" : "text-muted-foreground hover:text-moss-ink",
       )}
     >
       <span
         className={cn(
           "grid size-7 place-items-center rounded-full border-2",
-          status === "completed" ? "border-teal bg-teal" : "border-input bg-white",
+          status === "completed" ? "border-moss bg-moss" : "border-input bg-white",
         )}
       >
         {pending ? (
@@ -240,16 +249,30 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
     <article
       className={cn(
         "card-surface rounded-2xl p-3 sm:p-4",
+        protectedRest && "border-[#cfe0b4] bg-[#f1f6e6]",
         (cancelled || status === "skipped") && "bg-secondary/40 shadow-none",
       )}
     >
       <div className="flex items-start gap-3">
-        <CategoryIcon category={category} kind={reservation?.kind} className={cn("mt-0.5", cancelled && "opacity-60")} />
+        <CategoryIcon
+          category={category}
+          kind={reservation?.kind}
+          icon={protectedRest ? Moon : undefined}
+          className={cn("mt-0.5", cancelled && "opacity-60")}
+        />
         <div className="min-w-0 flex-1">
           {clock ? (
             <p className={cn("text-sm font-semibold text-ink", variant === "timed" && "sm:hidden")}>
               {clock.time}
               {clock.zone ? <span className="ml-1 font-normal text-muted-foreground">{clock.zone}</span> : null}
+              {estimated ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">· Estimated</span> : null}
+            </p>
+          ) : null}
+          {protectedRest || item?.is_optional ? (
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {protectedRest ? <span className="text-[#3d6b2a]">Protected rest</span> : null}
+              {protectedRest && item?.is_optional ? " · " : null}
+              {item?.is_optional ? "Optional" : null}
             </p>
           ) : null}
           <h4
@@ -266,26 +289,47 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
           <Badges entry={entry} status={status} />
 
           {item?.planning_notes && !isEnd ? (
-            <p className="mt-2 line-clamp-2 flex gap-1.5 text-sm whitespace-pre-line text-ink/80">
-              <StickyNote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              {item.planning_notes}
-            </p>
+            <details className="group mt-2 text-sm">
+              <summary className="focus-ring -ml-1 flex min-h-9 cursor-pointer list-none items-start gap-1.5 rounded px-1 py-1 text-ink/80 [&::-webkit-details-marker]:hidden">
+                <StickyNote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 flex-1 line-clamp-1 whitespace-pre-line group-open:line-clamp-none">
+                  {item.planning_notes}
+                </span>
+                <ChevronDown
+                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">Show details</span>
+              </summary>
+            </details>
           ) : null}
           {item?.place && !isEnd ? (
             <a
               href={placeMapsUrl(item.place)}
               target="_blank"
               rel="noopener noreferrer"
-              className="focus-ring mt-1 -ml-1 inline-flex min-h-9 items-center gap-1.5 rounded px-1 text-sm font-semibold text-teal-ink hover:underline"
+              className="focus-ring mt-1 -ml-1 inline-flex min-h-9 items-center gap-1.5 rounded px-1 text-sm font-semibold text-moss-ink hover:underline"
             >
               Map <ExternalLink className="size-3.5" aria-hidden="true" />
               <span className="sr-only">for {item.place.name} (opens in a new tab)</span>
             </a>
           ) : null}
-          {overlaps?.length ? (
-            <p className="mt-2 flex items-start gap-1.5 text-sm text-[#8a5a00]">
+          {restClash.length ? (
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-[#3d6b2a]">
+              <Moon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              Falls in your protected rest window — fine if that’s intended.
+            </p>
+          ) : null}
+          {insideRest.length ? (
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-[#3d6b2a]">
+              <Moon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              Planned during this rest window: {insideRest.map((o) => o.title).join(", ")}
+            </p>
+          ) : null}
+          {otherClash.length ? (
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-gold-ink">
               <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              Overlaps with {overlaps.join(", ")}
+              Overlaps with {otherClash.map((o) => o.title).join(", ")}
             </p>
           ) : null}
           {hasReview && !reflecting && item ? <ReviewSummary rating={item.rating} reflection={item.reflection} /> : null}
@@ -345,6 +389,7 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
           <>
             <p className="text-sm font-semibold whitespace-nowrap text-ink">{clock.time}</p>
             {clock.zone ? <p className="text-xs text-muted-foreground">{clock.zone}</p> : null}
+            {estimated ? <p className="text-[0.6875rem] text-muted-foreground/90">Estimated</p> : null}
           </>
         ) : null}
       </div>
@@ -373,7 +418,7 @@ function Badges({ entry, status }: { entry: AgendaEntry; status: ItineraryStatus
   } else if (entry.role !== "end") {
     if (status === "completed") {
       badges.push(
-        <span key="d" className="inline-flex items-center gap-1 rounded-full bg-teal-soft px-2.5 py-0.5 text-xs font-semibold text-teal-ink">
+        <span key="d" className="inline-flex items-center gap-1 rounded-full bg-moss-soft px-2.5 py-0.5 text-xs font-semibold text-moss-ink">
           <Check className="size-3" strokeWidth={3} aria-hidden="true" /> Done
         </span>,
       );
@@ -397,7 +442,7 @@ function Badges({ entry, status }: { entry: AgendaEntry; status: ItineraryStatus
 
 function ReviewSummary({ rating, reflection }: { rating: number | null; reflection: string | null }) {
   return (
-    <div className="mt-2 rounded-xl bg-sun/60 px-3 py-2 text-sm">
+    <div className="mt-2 rounded-xl bg-gold-soft/60 px-3 py-2 text-sm">
       {rating ? <Stars value={rating} /> : null}
       {reflection ? <p className="line-clamp-3 whitespace-pre-line text-ink/90 italic">“{reflection}”</p> : null}
     </div>

@@ -21,7 +21,7 @@ export function TripHero({ trip, today }: { trip: Trip; today: string }) {
   const cover = getCover(trip.cover_image);
 
   return (
-    <section className="relative isolate overflow-hidden bg-[#0b2a3a]">
+    <section className="relative isolate overflow-hidden bg-[#183a2f]">
       <Image
         src={cover.image}
         alt=""
@@ -33,8 +33,8 @@ export function TripHero({ trip, today }: { trip: Trip; today: string }) {
         className="-z-10 object-cover"
         style={{ objectPosition: cover.position }}
       />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#08263a]/80 via-[#08263a]/40 to-transparent" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#08263a]/45 to-transparent" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#10251e]/80 via-[#10251e]/40 to-transparent" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#10251e]/45 to-transparent" />
 
       <div className="mx-auto flex min-h-[15rem] max-w-[1280px] flex-col justify-between gap-6 px-4 py-5 sm:min-h-[19rem] sm:px-6 sm:py-7 lg:px-8">
         <div className="flex items-center justify-between gap-3">
@@ -61,7 +61,7 @@ export function TripHero({ trip, today }: { trip: Trip; today: string }) {
               <CalendarDays className="size-5" aria-hidden="true" />
               {formatDateRange(trip.start_date, trip.end_date)}
             </p>
-            <span className="inline-flex items-center gap-2 rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white shadow-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-moss-ink px-4 py-2 text-sm font-semibold text-white shadow-sm">
               <Clock className="size-4" aria-hidden="true" />
               {statusLabel(trip, today)}
             </span>

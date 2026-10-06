@@ -5,6 +5,10 @@ import { getDb } from "@/db";
 import * as q from "@/db/queries";
 import { getCurrentUser } from "@/lib/user";
 import type { StarterKey } from "@/lib/packing";
+import { COLLECTIONS, collectionById } from "@/lib/collections/aruba-2026-explore";
+import { collectionMatchesTrip } from "@/lib/collections/collection";
+import { PLANS } from "@/lib/plans/aruba-2026";
+import { planMatchesTrip } from "@/lib/plans/itinerary-plan";
 import { idSchema } from "@/lib/validation";
 import type {
   DocumentInput,
@@ -27,7 +31,12 @@ import type {
  */
 
 export type {
+  CollectionImportResult,
   ItineraryWriteResult,
+  PlanApplyInput,
+  PlanApplyResult,
+  PlanApplySummary,
+  PlanPreviewResult,
   PackingCategoryDeleteChoice,
   ReorderResult,
   VisitRecordResult,
@@ -174,6 +183,54 @@ export async function deletePlaceForUser(tripId: string, placeId: string, visits
   return q.deletePlace(getDb(), ownerId, tripId, placeId, visits);
 }
 
+export async function updatePlaceNotesForUser(tripId: string, placeId: string, notes: string | null) {
+  const ownerId = await requireUserId();
+  if (!isId(tripId) || !isId(placeId)) return false;
+  return q.updatePlaceNotes(getDb(), ownerId, tripId, placeId, notes);
+}
+
+export async function setPlaceFavoriteForUser(tripId: string, placeId: string, favorite: boolean) {
+  const ownerId = await requireUserId();
+  if (!isId(tripId) || !isId(placeId)) return false;
+  return q.setPlaceFavorite(getDb(), ownerId, tripId, placeId, favorite);
+}
+
+/**
+ * Curated collections that fit this trip, plus the user's other trips each
+ * one could also go into — so the traveler picks the trip rather than the
+ * app guessing. Read-only; null = trip not found.
+ */
+export const getExploreCollectionsForUser = cache(async (tripId: string) => {
+  const user = await requireUser();
+  if (!isId(tripId)) return null;
+  const trips = await q.listTrips(getDb(), user.id);
+  const trip = trips.find((t) => t.id === tripId);
+  if (!trip) return null;
+  return COLLECTIONS.filter((c) => collectionMatchesTrip(c, trip)).map((c) => ({
+    id: c.id,
+    label: c.label,
+    heading: c.heading,
+    subheading: c.subheading,
+    sourceKeys: c.items.map((i) => i.sourceKey),
+    counts: {
+      outings: c.items.filter((i) => i.recommendation.type === "attraction" || i.recommendation.type === "beach").length,
+      restaurants: c.items.filter((i) => i.recommendation.type === "restaurant").length,
+      spas: c.items.filter((i) => i.recommendation.type === "spa").length,
+    },
+    otherTrips: trips
+      .filter((t) => t.id !== tripId && collectionMatchesTrip(c, t))
+      .map((t) => ({ id: t.id, title: t.title, start_date: t.start_date, end_date: t.end_date })),
+  }));
+});
+
+/** Import a curated collection into one of the user's trips (idempotent). */
+export async function importExploreCollectionForUser(tripId: string, collectionId: string) {
+  const ownerId = await requireUserId();
+  const collection = collectionById(collectionId);
+  if (!collection || !isId(tripId)) return NOT_FOUND;
+  return q.importExploreCollection(getDb(), ownerId, tripId, collection);
+}
+
 /* ----------------------------- itinerary -------------------------- */
 
 /** Every visit with its place and booking; null = trip not found. */
@@ -239,6 +296,38 @@ export async function ensureReservationVisitForUser(tripId: string, reservationI
   const ownerId = await requireUserId();
   if (!isId(tripId) || !isId(reservationId)) return NOT_FOUND;
   return q.ensureReservationVisit(getDb(), ownerId, tripId, reservationId);
+}
+
+/* -------------------------- itinerary plans ------------------------ */
+
+const planById = (planId: string) => PLANS.find((p) => p.id === planId) ?? null;
+
+/**
+ * Preview a saved plan against one of the user's trips (read-only), plus the
+ * user's other trips the plan could also fit — so the traveler picks the
+ * right one instead of the app guessing. null = trip or plan not found.
+ */
+export async function previewItineraryPlanForUser(tripId: string, planId: string) {
+  const ownerId = await requireUserId();
+  const plan = planById(planId);
+  if (!plan || !isId(tripId)) return null;
+  const db = getDb();
+  const [preview, trips] = await Promise.all([
+    q.previewItineraryPlan(db, ownerId, tripId, plan),
+    q.listTrips(db, ownerId),
+  ]);
+  if (!preview) return null;
+  const otherTrips = trips
+    .filter((t) => t.id !== tripId && planMatchesTrip(plan, t))
+    .map((t) => ({ id: t.id, title: t.title, start_date: t.start_date, end_date: t.end_date }));
+  return { preview, otherTrips };
+}
+
+export async function applyItineraryPlanForUser(tripId: string, planId: string, input: q.PlanApplyInput) {
+  const ownerId = await requireUserId();
+  const plan = planById(planId);
+  if (!plan || !isId(tripId)) return NOT_FOUND;
+  return q.applyItineraryPlan(getDb(), ownerId, tripId, plan, input);
 }
 
 /* ------------------------------ packing --------------------------- */

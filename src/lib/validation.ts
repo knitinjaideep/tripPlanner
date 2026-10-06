@@ -232,10 +232,22 @@ export const itineraryItemSchema = z
     local_end_time: optionalTime,
     timezone: optionalTimeZone,
     planning_notes: optionalText("Notes", 5000),
+    // Missing (older callers) reads as unchecked.
+    is_optional: checkbox.optional().transform((v) => v === true),
+    is_protected_rest: checkbox.optional().transform((v) => v === true),
   })
   .transform((v) => {
     if (v.reservation_id) {
-      return { ...v, local_date: null, local_start_time: null, local_end_date: null, local_end_time: null, timezone: null };
+      return {
+        ...v,
+        local_date: null,
+        local_start_time: null,
+        local_end_date: null,
+        local_end_time: null,
+        timezone: null,
+        is_optional: false,
+        is_protected_rest: false,
+      };
     }
     // Keep one representation of "ends the same day": no end date.
     return v.local_end_date === v.local_date ? { ...v, local_end_date: null } : v;
@@ -339,6 +351,13 @@ export const packingCopySchema = z.object({
 });
 
 /** Deleting an Explore place that has visits: refuse, or keep the visits without it. */
+/** "Your notes" on an Explore place; blank clears them. */
+export const placeNotesSchema = z.object({ planning_notes: optionalText("Notes", 5000) });
+
+export const placeFavoriteSchema = z.boolean();
+
+export const collectionIdSchema = z.string().regex(/^[a-z0-9-]{1,60}$/);
+
 export const deletePlaceSchema = z.object({ visits: z.enum(["block", "detach"]) });
 
 /** The trip's reflection (everything except the album link, which is saved on its own). */
@@ -369,6 +388,16 @@ export const captureMomentSchema = z.object({
   rating: optionalRating,
   reflection: optionalText("Reflection", 5000),
   is_favorite: checkbox,
+});
+
+/** Applying a previewed itinerary plan: the preview's token and a choice per conflict. */
+export const planApplySchema = z.object({
+  plan_id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  token: z.string().regex(/^[0-9a-f]{16}$/),
+  choices: z
+    .record(z.string().max(160), z.enum(["keep", "plan"]))
+    .refine((c) => Object.keys(c).length <= 300),
+  set_trip_time_zone: z.boolean(),
 });
 
 /** Read named string fields from FormData ("" when missing). */

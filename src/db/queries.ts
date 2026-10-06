@@ -12,6 +12,25 @@ import {
   trips,
 } from "./schema";
 import { exploreKindFor } from "@/lib/plan-options";
+import {
+  fingerprint,
+  mergeNotes,
+  planPreview,
+  planValues,
+  previewToken,
+  sourceKey,
+  type ItineraryPlan,
+  type PlanChoice,
+  type PlanPreview,
+} from "@/lib/plans/itinerary-plan";
+import {
+  collectionMatchesTrip,
+  planCollectionImport,
+  priorityFor,
+  recommendationFor,
+  type ExploreCollection,
+  type ImportSummary,
+} from "@/lib/collections/collection";
 import { todayInTimeZone } from "@/lib/dates";
 import { normalizeName, planMerge, starterSource, type MergeSourceCategory, type StarterKey } from "@/lib/packing";
 import {
@@ -417,6 +436,131 @@ export async function updatePlace(db: Db, ownerId: OwnerId, tripId: string, plac
     .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
     .returning({ id: places.id });
   return rows.length === 1;
+}
+
+/** Only the traveler's own notes change. false = not found. */
+export async function updatePlaceNotes(db: Db, ownerId: OwnerId, tripId: string, placeId: string, notes: string | null) {
+  const rows = await db
+    .update(places)
+    .set({ planning_notes: notes })
+    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
+    .returning({ id: places.id });
+  return rows.length === 1;
+}
+
+/** Sets the given value (never inverts the stored one), so repeated clicks converge. */
+export async function setPlaceFavorite(db: Db, ownerId: OwnerId, tripId: string, placeId: string, favorite: boolean) {
+  const rows = await db
+    .update(places)
+    .set({ is_favorite: favorite })
+    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
+    .returning({ id: places.id });
+  return rows.length === 1;
+}
+
+export type CollectionImportResult =
+  | { ok: true; summary: ImportSummary }
+  | { ok: false; reason: "not_found" | "not_matching" };
+
+/**
+ * Import a curated collection into one of the owner's trips, in one
+ * transaction with the trip row locked (a double click or second tab waits,
+ * then finds everything already there). Idempotent by `source_key`, with the
+ * unique (trip_id, source_key) constraint as the last line of defence.
+ *
+ * Writes only: new places, `source_key` + `recommendation` on a claimed
+ * place (plus its website when it had none), and refreshed `recommendation`
+ * on places imported earlier. Never touches names, categories, priorities,
+ * notes, favorites, visits, itinerary entries or bookings.
+ */
+export async function importExploreCollection(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  collection: ExploreCollection,
+): Promise<CollectionImportResult> {
+  return db.transaction(async (tx): Promise<CollectionImportResult> => {
+    const [trip] = await tx
+      .select({ id: trips.id, title: trips.title, destination: trips.destination })
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.owner_id, ownerId)))
+      .for("update");
+    if (!trip) return { ok: false, reason: "not_found" };
+    if (!collectionMatchesTrip(collection, trip)) return { ok: false, reason: "not_matching" };
+
+    const existing = await tx
+      .select({
+        id: places.id,
+        name: places.name,
+        kind: places.kind,
+        source_key: places.source_key,
+        recommendation: places.recommendation,
+      })
+      .from(places)
+      .where(and(eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
+      .orderBy(asc(places.created_at));
+
+    const summary: ImportSummary = {
+      total: collection.items.length,
+      added: 0,
+      existing: 0,
+      refreshed: 0,
+      linked: [],
+      skipped: [],
+      possibleDuplicates: [],
+    };
+    const own = (placeId: string) =>
+      and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId));
+
+    for (const op of planCollectionImport(collection, existing)) {
+      const recommendation = recommendationFor(collection, op.item);
+      if (op.kind === "existing") {
+        summary.existing++;
+      } else if (op.kind === "refresh") {
+        await tx.update(places).set({ recommendation }).where(own(op.placeId));
+        summary.existing++;
+        summary.refreshed++;
+      } else if (op.kind === "link") {
+        const rows = await tx
+          .update(places)
+          .set({
+            source_key: op.item.sourceKey,
+            recommendation,
+            website_url: sql`coalesce(${places.website_url}, ${op.item.website})`,
+          })
+          .where(and(own(op.placeId), sql`${places.source_key} is null`))
+          .returning({ id: places.id });
+        if (rows.length) summary.linked.push({ name: op.item.name, placeName: op.placeName });
+      } else if (op.kind === "skip") {
+        summary.skipped.push({ name: op.item.name, matches: op.matches });
+      } else {
+        const inserted = await tx
+          .insert(places)
+          .values({
+            name: op.item.name,
+            kind: op.item.kind,
+            category: op.item.category,
+            priority: priorityFor(op.item.recommendation.tier),
+            website_url: op.item.website,
+            source_key: op.item.sourceKey,
+            recommendation,
+            trip_id: tripId,
+            owner_id: ownerId,
+          })
+          .onConflictDoNothing({ target: [places.trip_id, places.source_key] })
+          .returning({ id: places.id });
+        if (inserted.length) {
+          summary.added++;
+          if (op.possibleDuplicates.length) {
+            summary.possibleDuplicates.push({ name: op.item.name, matches: op.possibleDuplicates });
+          }
+        } else {
+          summary.existing++;
+        }
+      }
+    }
+    return { ok: true, summary };
+  });
 }
 
 export type PlaceDeleteResult =
@@ -961,6 +1105,8 @@ export async function duplicateItineraryItem(
         local_end_time: item.local_end_time,
         timezone: item.timezone,
         planning_notes: item.planning_notes,
+        is_optional: item.is_optional,
+        is_protected_rest: item.is_protected_rest,
         sort_order: await nextSortOrder(tx, ownerId, tripId),
       })
       .returning({ id: itineraryItems.id });
@@ -1084,6 +1230,185 @@ export async function ensureReservationVisit(
     return ensureReservationVisit(db, ownerId, tripId, reservationId, false);
   }
   return created;
+}
+
+/* -------------------------- itinerary plans ------------------------ */
+
+/** Everything a plan preview is computed from, read in one place (optionally under the trip lock). */
+async function planContext(db: Executor, ownerId: OwnerId, tripId: string, lock: boolean) {
+  const tripQuery = db
+    .select({
+      id: trips.id,
+      title: trips.title,
+      destination: trips.destination,
+      start_date: trips.start_date,
+      end_date: trips.end_date,
+      time_zone: trips.time_zone,
+      travelers: trips.travelers,
+    })
+    .from(trips)
+    .where(and(eq(trips.id, tripId), eq(trips.owner_id, ownerId)))
+    .limit(1);
+  const [trip] = lock ? await tripQuery.for("update") : await tripQuery;
+  if (!trip) return null;
+  // Sequential: inside a transaction these share one connection.
+  const rows = await db
+    .select()
+    .from(itineraryItems)
+    .where(and(eq(itineraryItems.trip_id, tripId), eq(itineraryItems.owner_id, ownerId)))
+    .orderBy(asc(itineraryItems.sort_order), asc(itineraryItems.created_at));
+  const placeRows = await db
+    .select({ id: places.id, name: places.name })
+    .from(places)
+    .where(and(eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
+    .orderBy(asc(places.created_at));
+  const reservationRows = await db
+    .select()
+    .from(reservations)
+    .where(and(eq(reservations.trip_id, tripId), eq(reservations.owner_id, ownerId)));
+  return { trip, rows, places: placeRows, reservations: reservationRows };
+}
+
+export type PlanPreviewResult = PlanPreview & { token: string };
+
+function previewFrom(plan: ItineraryPlan, ctx: NonNullable<Awaited<ReturnType<typeof planContext>>>): PlanPreviewResult {
+  const preview = planPreview({ plan, ...ctx });
+  return { ...preview, token: previewToken(preview, ctx.rows, ctx.trip, ctx.reservations) };
+}
+
+/** Read-only: what applying the plan would do. null = not the owner's trip. */
+export async function previewItineraryPlan(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  plan: ItineraryPlan,
+): Promise<PlanPreviewResult | null> {
+  const ctx = await planContext(db, ownerId, tripId, false);
+  return ctx ? previewFrom(plan, ctx) : null;
+}
+
+export type PlanApplyInput = {
+  token: string;
+  /** Conflict id → choice; anything missing stays "keep". */
+  choices: Record<string, PlanChoice>;
+  setTripTimeZone: boolean;
+};
+
+export type PlanApplySummary = {
+  added: number;
+  updated: number;
+  linked: number;
+  removed: number;
+  kept: number;
+  unchanged: number;
+  tripTimeZone: string | null;
+};
+
+export type PlanApplyResult =
+  | { ok: true; summary: PlanApplySummary }
+  | { ok: false; reason: "not_found" | "blocked" }
+  | { ok: false; reason: "stale"; preview: PlanPreviewResult };
+
+/**
+ * Apply a previewed plan in one transaction. The trip row is locked and the
+ * preview recomputed from current data; if it no longer matches the token the
+ * traveler reviewed, nothing is written and the fresh preview is returned.
+ * Repeating an apply (double click, second tab) therefore finds nothing left
+ * to do. Status, rating, reflection, favorite and place links are never
+ * written; bookings are only read.
+ */
+export async function applyItineraryPlan(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  plan: ItineraryPlan,
+  input: PlanApplyInput,
+): Promise<PlanApplyResult> {
+  return db.transaction(async (tx): Promise<PlanApplyResult> => {
+    const ctx = await planContext(tx, ownerId, tripId, true);
+    if (!ctx) return { ok: false, reason: "not_found" };
+    const preview = previewFrom(plan, ctx);
+    if (preview.blocked) return { ok: false, reason: "blocked" };
+    if (preview.token !== input.token) return { ok: false, reason: "stale", preview };
+
+    const byKey = new Map(plan.items.map((i) => [i.key, i]));
+    const rowsById = new Map(ctx.rows.map((r) => [r.id, r]));
+    const placeIdByName = new Map(ctx.places.map((p) => [p.name, p.id]));
+    const summary: PlanApplySummary = { added: 0, updated: 0, linked: 0, removed: 0, kept: 0, unchanged: 0, tripTimeZone: null };
+    const own = (rowId: string) =>
+      and(eq(itineraryItems.id, rowId), eq(itineraryItems.trip_id, tripId), eq(itineraryItems.owner_id, ownerId));
+    let sortOrder = await nextSortOrder(tx, ownerId, tripId);
+
+    for (const op of preview.ops) {
+      if (op.kind === "unchanged") {
+        summary.unchanged++;
+      } else if (op.kind === "add") {
+        const item = byKey.get(op.item.key)!;
+        const values = planValues(plan, item);
+        const inserted = await tx
+          .insert(itineraryItems)
+          .values({
+            ...values,
+            place_id: op.placeName ? (placeIdByName.get(op.placeName) ?? null) : null,
+            source_key: sourceKey(plan, item),
+            source_fingerprint: fingerprint(values),
+            sort_order: sortOrder++,
+            trip_id: tripId,
+            owner_id: ownerId,
+          })
+          // The trip lock already serializes applies; this is the last line against a second copy.
+          .onConflictDoNothing({ target: [itineraryItems.trip_id, itineraryItems.source_key] })
+          .returning({ id: itineraryItems.id });
+        if (inserted.length) summary.added++;
+      } else if (op.kind === "update" || op.kind === "link") {
+        const item = byKey.get(op.item.key)!;
+        const values = planValues(plan, item);
+        await tx
+          .update(itineraryItems)
+          .set(
+            op.kind === "update"
+              ? { ...values, source_key: sourceKey(plan, item), source_fingerprint: fingerprint(values) }
+              : { source_key: sourceKey(plan, item), source_fingerprint: fingerprint(values) },
+          )
+          .where(own(op.rowId));
+        summary[op.kind === "update" ? "updated" : "linked"]++;
+      } else if (op.kind === "remove") {
+        await tx.delete(itineraryItems).where(own(op.rowId));
+        summary.removed++;
+      } else if ((input.choices[op.id] ?? "keep") === "keep") {
+        summary.kept++;
+      } else if (op.reason === "retire") {
+        await tx.delete(itineraryItems).where(own(op.rowId));
+        summary.removed++;
+      } else {
+        // "Use the plan" on an edited / matching entry: planning fields only;
+        // the traveler's notes stay (plan text appended), a place visit keeps its name.
+        const item = byKey.get(op.item!.key)!;
+        const row = rowsById.get(op.rowId)!;
+        const values = planValues(plan, item);
+        await tx
+          .update(itineraryItems)
+          .set({
+            ...values,
+            title: row.place_id && row.title === null ? null : values.title,
+            planning_notes: mergeNotes(row.planning_notes, values.planning_notes),
+            source_key: sourceKey(plan, item),
+            source_fingerprint: fingerprint(values),
+          })
+          .where(own(op.rowId));
+        summary.updated++;
+      }
+    }
+
+    if (input.setTripTimeZone && preview.zoneOption) {
+      await tx
+        .update(trips)
+        .set({ time_zone: plan.timeZone })
+        .where(and(eq(trips.id, tripId), eq(trips.owner_id, ownerId)));
+      summary.tripTimeZone = plan.timeZone;
+    }
+    return { ok: true, summary };
+  });
 }
 
 /* ----------------------------- packing ---------------------------- */

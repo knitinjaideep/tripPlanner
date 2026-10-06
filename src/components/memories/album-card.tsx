@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { EditDialog, useDirty } from "./edit-dialog";
 
 const smallButton =
-  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-lavender-ink hover:bg-white/60";
+  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-earth-ink hover:bg-white/60";
 
 /** Which service the link points at — a label only; nothing is fetched. */
 function albumHost(url: string) {
@@ -30,7 +30,7 @@ function albumHost(url: string) {
 }
 
 /**
- * A link to the family's album, kept elsewhere. rove only stores and opens
+ * A link to the family's album, kept elsewhere. Atlas only stores and opens
  * the link — it never uploads, imports or looks inside the album.
  */
 export function AlbumCard({ tripId, url, className }: { tripId: string; url: string | null; className?: string }) {
@@ -44,25 +44,25 @@ export function AlbumCard({ tripId, url, className }: { tripId: string; url: str
   const host = url ? albumHost(url) : null;
 
   return (
-    <section aria-labelledby="album-heading" className={cn("flex flex-col rounded-2xl bg-lavender p-5 sm:p-6", className)}>
-      <h2 id="album-heading" className="eyebrow flex items-center gap-2 text-lavender-ink">
+    <section aria-labelledby="album-heading" className={cn("flex flex-col rounded-2xl bg-surface-warm p-5 sm:p-6", className)}>
+      <h2 id="album-heading" className="eyebrow flex items-center gap-2 text-earth-ink">
         <Images className="size-4" aria-hidden="true" /> Photo album
       </h2>
       {url ? (
         <>
           <p className="font-display mt-3 text-[1.375rem] leading-snug font-semibold text-ink">Your photos live here.</p>
-          {host ? <p className="mt-1 truncate text-sm text-[#4f4a63]">{host}</p> : null}
+          {host ? <p className="mt-1 truncate text-sm text-earth-ink">{host}</p> : null}
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="focus-ring mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-lavender-ink px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-[#4a3b86]"
+            className="focus-ring mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-earth-ink px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-[#5a462b]"
           >
             Open photo album <ExternalLink className="size-4" aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
-          <p className="mt-3 text-xs text-[#4f4a63]">
-            A link only — rove can’t see what’s inside, and who can open it is set where the album lives.
+          <p className="mt-3 text-xs text-earth-ink">
+            A link only — Atlas can’t see what’s inside, and who can open it is set where the album lives.
           </p>
           <div className="mt-auto flex flex-wrap gap-1 pt-3">
             <button type="button" onClick={edit} className={cn(smallButton, "-ml-2.5")}>
@@ -75,13 +75,13 @@ export function AlbumCard({ tripId, url, className }: { tripId: string; url: str
         </>
       ) : (
         <>
-          <p className="mt-3 text-[0.9375rem] leading-relaxed text-[#4f4a63]">
-            Keep your Google Photos or Drive album one tap away. rove stores the link only — your photos stay where they are.
+          <p className="mt-3 text-[0.9375rem] leading-relaxed text-earth-ink">
+            Keep your Google Photos or Drive album one tap away. Atlas stores the link only — your photos stay where they are.
           </p>
           <button
             type="button"
             onClick={edit}
-            className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border-[1.5px] border-lavender-ink px-5 text-[0.9375rem] font-semibold text-lavender-ink transition-colors hover:bg-white/60"
+            className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border-[1.5px] border-earth-ink px-5 text-[0.9375rem] font-semibold text-earth-ink transition-colors hover:bg-white/60"
           >
             <Plus className="size-4" aria-hidden="true" /> Add album link
           </button>
@@ -94,7 +94,7 @@ export function AlbumCard({ tripId, url, className }: { tripId: string; url: str
         open={removing}
         onOpenChange={setRemoving}
         title="Remove the album link?"
-        description="Only the link is removed from rove. The album and its photos are not touched."
+        description="Only the link is removed from Atlas. The album and its photos are not touched."
         confirmLabel="Remove link"
         pendingLabel="Removing…"
         onConfirm={async () => {

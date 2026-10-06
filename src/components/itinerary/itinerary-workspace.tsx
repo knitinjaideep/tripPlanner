@@ -251,7 +251,7 @@ function MoveDialog({
               type="submit"
               disabled={pending || date === item?.local_date}
               aria-busy={pending}
-              className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white hover:bg-coral-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-moss-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               {pending ? "Moving…" : "Move"}

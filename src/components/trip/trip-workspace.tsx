@@ -188,7 +188,7 @@ export function TripWorkspace({
           pendingDelete?.type === "booking"
             ? `“${pendingDelete.booking.title}” will be removed from this trip. Document links attached to it stay on the trip, and if it’s on your itinerary with notes or a review, that entry is kept.`
             : pendingDelete?.type === "document"
-              ? `“${pendingDelete.doc.label}” will be removed from rove. The file itself is not touched.`
+              ? `“${pendingDelete.doc.label}” will be removed from Atlas. The file itself is not touched.`
               : ""
         }
         confirmLabel={pendingDelete?.type === "booking" ? "Delete booking" : "Remove link"}
@@ -248,9 +248,9 @@ function BookingDetails({
           </p>
         ) : null}
         {b.confirmation_code ? (
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-sun px-4 py-3">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-gold-soft px-4 py-3">
             <div className="min-w-0">
-              <p className="eyebrow text-[#6b5200]">Confirmation</p>
+              <p className="eyebrow text-gold-ink">Confirmation</p>
               <p className="mt-1 truncate font-mono text-lg font-semibold tracking-wider text-ink">
                 {b.confirmation_code}
               </p>
@@ -281,7 +281,7 @@ function BookingDetails({
                 href={b.booking_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="focus-ring inline-flex items-center gap-1.5 rounded font-medium text-teal-ink underline-offset-4 hover:underline"
+                className="focus-ring inline-flex items-center gap-1.5 rounded font-medium text-moss-ink underline-offset-4 hover:underline"
               >
                 Open booking <ExternalLink className="size-3.5" aria-hidden="true" />
                 <span className="sr-only">(opens in a new tab)</span>
@@ -297,13 +297,13 @@ function BookingDetails({
           </section>
         ) : null}
 
-        <section className="rounded-2xl bg-lavender p-4">
+        <section className="rounded-2xl bg-surface-warm p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="eyebrow text-lavender-ink">Documents</h3>
+            <h3 className="eyebrow text-earth-ink">Documents</h3>
             <button
               type="button"
               onClick={onAddDocument}
-              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-lavender-ink hover:bg-white/60"
+              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-earth-ink hover:bg-white/60"
             >
               <Plus className="size-4" aria-hidden="true" /> Add link
             </button>
@@ -315,7 +315,7 @@ function BookingDetails({
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-sm text-[#4f4a63]">Attach the ticket, voucher or confirmation from Drive.</p>
+            <p className="mt-1 text-sm text-earth-ink">Attach the ticket, voucher or confirmation from Drive.</p>
           )}
         </section>
       </div>

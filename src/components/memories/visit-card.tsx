@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { EditDialog, useDirty } from "./edit-dialog";
 
 const linkClass =
-  "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-teal-ink hover:bg-teal-soft/60";
+  "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-moss-ink hover:bg-moss-soft/60";
 
 /**
  * One completed visit in the journal. Its rating, reflection and favorite
@@ -61,7 +61,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
       aria-labelledby={`visit-${visit.id}`}
       className={cn(
         "card-surface relative flex gap-3.5 p-4 sm:gap-4 sm:p-5",
-        favorite && "border-[#f5c6bd] bg-[#fffaf8]",
+        favorite && "border-gold/70 bg-[#fffbef]",
       )}
     >
       <CategoryIcon category={visit.category} kind={visit.reservation?.kind} className="mt-0.5 size-10" />
@@ -89,7 +89,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
             title={favorite ? "Favorite" : "Mark as favorite"}
             className={cn(
               "focus-ring -mt-1 -mr-1 grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-[#ffe9e4] disabled:cursor-wait",
-              favorite ? "text-coral" : "text-[#8a979f] hover:text-coral",
+              favorite ? "text-coral" : "text-[#8e9480] hover:text-coral",
             )}
           >
             <Heart className={cn("size-5", favorite && "fill-current")} aria-hidden="true" />
@@ -99,7 +99,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
         {visit.rating ? <Stars value={visit.rating} className="mt-2" /> : null}
 
         {visit.reflection ? (
-          <blockquote className="mt-2.5 border-l-2 border-sun pl-3.5 text-[0.9375rem] leading-relaxed whitespace-pre-line text-ink/90">
+          <blockquote className="mt-2.5 border-l-2 border-gold pl-3.5 text-[0.9375rem] leading-relaxed whitespace-pre-line text-ink/90">
             {visit.reflection}
           </blockquote>
         ) : null}
@@ -110,7 +110,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
               <Pencil className="size-3.5" aria-hidden="true" /> Edit<span className="sr-only"> reflection for {title}</span>
             </button>
           ) : (
-            <button type="button" onClick={edit} className={cn(linkClass, "text-muted-foreground hover:text-teal-ink")}>
+            <button type="button" onClick={edit} className={cn(linkClass, "text-muted-foreground hover:text-moss-ink")}>
               <PenLine className="size-3.5" aria-hidden="true" /> Add a reflection<span className="sr-only"> for {title}</span>
             </button>
           )}

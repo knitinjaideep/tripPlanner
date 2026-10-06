@@ -1,9 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createPlaceForUser, deletePlaceForUser, recordPlaceVisitForUser, updatePlaceForUser } from "@/lib/dal";
 import {
+  createPlaceForUser,
+  deletePlaceForUser,
+  importExploreCollectionForUser,
+  recordPlaceVisitForUser,
+  setPlaceFavoriteForUser,
+  updatePlaceForUser,
+  updatePlaceNotesForUser,
+} from "@/lib/dal";
+import { importMessage, type ImportSummary } from "@/lib/collections/collection";
+import {
+  collectionIdSchema,
   deletePlaceSchema,
+  idSchema,
+  placeFavoriteSchema,
+  placeNotesSchema,
   formFields,
   placeSchema,
   recordVisitSchema,
@@ -132,4 +145,67 @@ export async function deletePlace(
 
   if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
   return linkedVisits ? { ...result, visits: linkedVisits } : result;
+}
+
+/** "Your notes" on a place — only that field changes. */
+export async function savePlaceNotes(
+  tripId: string,
+  placeId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = placeNotesSchema.safeParse(formFields(formData, ["planning_notes"] as const));
+  if (!parsed.success) return invalid(parsed.error);
+  const result = await guarded("savePlaceNotes", async () =>
+    (await updatePlaceNotesForUser(tripId, placeId, parsed.data.planning_notes))
+      ? { ok: true, message: parsed.data.planning_notes ? "Notes saved." : "Notes cleared." }
+      : notFound("Place"),
+  );
+  if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
+  return result;
+}
+
+/** Set (not toggle) a place's favorite, so retries and repeated clicks converge. */
+export async function setPlaceFavorite(tripId: string, placeId: string, favorite: boolean): Promise<ActionState> {
+  const parsed = placeFavoriteSchema.safeParse(favorite);
+  if (!parsed.success) return { ok: false, message: "Couldn’t read that change." };
+  const result = await guarded("setPlaceFavorite", async () =>
+    (await setPlaceFavoriteForUser(tripId, placeId, parsed.data))
+      ? { ok: true, message: parsed.data ? "Saved to favorites." : "Removed from favorites." }
+      : notFound("Place"),
+  );
+  if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
+  return result;
+}
+
+export type ImportState = ActionState & { summary?: ImportSummary };
+
+/**
+ * Add a curated collection's places to this trip's Explore. Safe to repeat:
+ * places already added are found by their source key, and the traveler's
+ * own notes, favorites, edits and visits are never changed. All or nothing —
+ * on any failure, nothing is added.
+ */
+export async function importExploreCollection(tripId: string, collectionId: string): Promise<ImportState> {
+  if (!idSchema.safeParse(tripId).success) return notFound("Trip");
+  const parsed = collectionIdSchema.safeParse(collectionId);
+  if (!parsed.success) return notFound("Collection");
+
+  let summary: ImportSummary | undefined;
+  const result = await guarded("importExploreCollection", async () => {
+    const outcome = await importExploreCollectionForUser(tripId, parsed.data);
+    if (outcome.ok) {
+      summary = outcome.summary;
+      return { ok: true, message: importMessage(outcome.summary) };
+    }
+    if (outcome.reason === "not_matching") {
+      return { ok: false, message: "These recommendations are for a different destination than this trip." };
+    }
+    return notFound("Trip");
+  });
+  if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
+  if (!result.ok && !result.signedOut && result.message?.startsWith("Something went wrong")) {
+    return { ...result, message: "Couldn’t add the recommendations. Nothing was added — please try again." };
+  }
+  return summary ? { ...result, summary } : result;
 }

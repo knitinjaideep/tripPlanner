@@ -63,7 +63,7 @@ export function DayStrip({
                   "focus-ring flex w-[4.25rem] flex-col items-center rounded-2xl border px-1 pt-2 pb-2.5 transition-colors",
                   active
                     ? "border-ink bg-ink text-white"
-                    : "border-border bg-surface text-ink hover:border-teal hover:bg-teal-soft/50",
+                    : "border-border bg-surface text-ink hover:border-moss hover:bg-moss-soft/50",
                 )}
               >
                 <span className={cn("text-[0.6875rem] font-semibold tracking-wide uppercase", active ? "text-white/80" : "text-muted-foreground")}>
@@ -76,7 +76,7 @@ export function DayStrip({
                 <span
                   className={cn(
                     "mt-1 size-1.5 rounded-full",
-                    d.count ? (active ? "bg-coral-bright" : "bg-coral") : "bg-transparent",
+                    d.count ? (active ? "bg-gold" : "bg-moss") : "bg-transparent",
                   )}
                   aria-hidden="true"
                 />

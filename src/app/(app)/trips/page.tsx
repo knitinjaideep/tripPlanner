@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { NewTripButton } from "@/components/new-trip-button";
 import { FlashToast } from "@/components/flash-toast";
+import { FirstTripWelcome } from "@/components/first-trip-welcome";
+import { MascotImage } from "@/components/mascot";
 import { TripCard } from "@/components/trip-card";
 import { listTripsForUser } from "@/lib/dal";
-import { getCover } from "@/lib/covers";
 import { hourInTimeZone, todayInTimeZone, tripPhase } from "@/lib/dates";
 import { getViewerTimeZone } from "@/lib/timezone";
 import { requireUser } from "@/lib/dal";
@@ -80,18 +80,22 @@ export default async function TripsPage({ searchParams }: PageProps<"/trips">) {
       {params.deleted ? <FlashToast message="Trip deleted." /> : null}
 
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="eyebrow text-teal-ink">My trips</p>
-          <h1 className="font-display mt-2 text-4xl leading-[1.05] font-semibold text-ink sm:text-5xl">
-            {greeting(hourInTimeZone(timeZone))}, {user.firstName}.
-          </h1>
-          <p className="mt-3 text-[1.0625rem] text-muted-foreground">{summary}</p>
+        <div className="flex items-center gap-4 sm:gap-6">
+          {/* The guardian says hello — only when the welcome card (which has its own) isn't shown. */}
+          {trips.length > 0 ? <MascotImage size="greet" variant="glow" decorative priority /> : null}
+          <div className="min-w-0">
+            <p className="eyebrow text-moss-ink">My trips</p>
+            <h1 className="font-display mt-2 text-[2rem] leading-[1.05] font-semibold text-ink sm:text-5xl">
+              {greeting(hourInTimeZone(timeZone))}, {user.firstName}.
+            </h1>
+            <p className="mt-3 text-[1.0625rem] text-muted-foreground">{summary}</p>
+          </div>
         </div>
         {trips.length > 0 ? <NewTripButton /> : null}
       </div>
 
       {trips.length === 0 ? (
-        <EmptyTrips />
+        <FirstTripWelcome />
       ) : (
         <div className="mt-10 space-y-14">
           <TripGroup
@@ -112,37 +116,5 @@ export default async function TripsPage({ searchParams }: PageProps<"/trips">) {
         </div>
       )}
     </main>
-  );
-}
-
-function EmptyTrips() {
-  const cover = getCover("coast");
-  return (
-    <section className="card-surface mt-10 grid overflow-hidden md:grid-cols-[1.1fr_1fr]">
-      <div className="relative min-h-56 md:min-h-[22rem]">
-        <Image
-          src={cover.image}
-          alt={cover.alt}
-          fill
-          loading="eager"
-          fetchPriority="high"
-          placeholder="blur"
-          sizes="(min-width: 768px) 640px, 100vw"
-          className="object-cover"
-          style={{ objectPosition: cover.position }}
-        />
-      </div>
-      <div className="flex flex-col justify-center gap-4 p-6 sm:p-10">
-        <p className="eyebrow text-teal-ink">Your first trip</p>
-        <h2 className="font-display text-3xl leading-tight font-semibold text-ink">Where are you headed?</h2>
-        <p className="text-muted-foreground">
-          Create a trip, then add the flights, stays and reservations you’ve booked — with confirmation numbers
-          and Drive links kept right beside them.
-        </p>
-        <div>
-          <NewTripButton label="Create your first trip" />
-        </div>
-      </div>
-    </section>
   );
 }

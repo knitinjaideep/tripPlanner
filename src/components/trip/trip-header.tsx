@@ -25,7 +25,7 @@ export function TripHeaderCompact({ trip, today }: { trip: Trip; today: string }
           href={`/trips/${trip.id}`}
           className="focus-ring group flex min-w-0 flex-1 items-center gap-3 rounded-xl sm:gap-4"
         >
-          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-[#0b2a3a] sm:size-14">
+          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-[#183a2f] sm:size-14">
             <Image
               src={cover.image}
               alt=""
@@ -37,7 +37,7 @@ export function TripHeaderCompact({ trip, today }: { trip: Trip; today: string }
           </span>
           <span className="min-w-0">
             <span className="eyebrow block truncate text-muted-foreground">{trip.destination}</span>
-            <span className="font-display block truncate text-xl leading-tight font-semibold text-ink group-hover:text-teal-ink sm:text-2xl">
+            <span className="font-display block truncate text-xl leading-tight font-semibold text-ink group-hover:text-moss-ink sm:text-2xl">
               {trip.title}
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
