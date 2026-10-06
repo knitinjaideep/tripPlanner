@@ -1,4 +1,5 @@
 import type { StaticImageData } from "next/image";
+import type { CoverKey } from "./cover-keys";
 import beach from "../../public/images/covers/beach.jpg";
 import coast from "../../public/images/covers/coast.jpg";
 import city from "../../public/images/covers/city.jpg";
@@ -14,7 +15,7 @@ import desert from "../../public/images/covers/desert.jpg";
  * specific booking. Sources and licences: docs/image-credits.md.
  */
 export type Cover = {
-  key: string;
+  key: CoverKey;
   label: string;
   alt: string;
   image: StaticImageData;
@@ -122,9 +123,7 @@ export const COVERS = [
   },
 ] as const satisfies readonly Cover[];
 
-export type CoverKey = (typeof COVERS)[number]["key"];
-
-export const COVER_KEYS = COVERS.map((c) => c.key) as [CoverKey, ...CoverKey[]];
+export { COVER_KEYS, type CoverKey } from "./cover-keys";
 
 export const DEFAULT_COVER: CoverKey = "beach";
 

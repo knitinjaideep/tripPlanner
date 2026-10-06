@@ -11,8 +11,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # rove project notes
 
 - Read `docs/implementation-status.md` first — it records what is built, the architecture, and the next steps.
-- All data access goes through Supabase as the signed-in user; RLS is the privacy boundary. Never use a service-role key in app code.
-- New tables follow the existing pattern: `owner_id default auth.uid()`, composite FK `(trip_id, owner_id)` → `trips(id, owner_id)`, owner-only RLS with `(select auth.uid())`.
-- Mutations are Server Actions in `src/app/actions/*`, validated with Zod in `src/lib/validation.ts`.
-- Booking times are local wall-clock values; do not convert them through UTC.
+- Stack: Neon Postgres + Neon Auth (`@neondatabase/auth`), Drizzle ORM over node-postgres. No Supabase, no RLS.
+- All database access is server-only and goes through `src/lib/dal.ts`, which verifies the session in every function and passes the verified Neon Auth user ID to the owner-scoped queries in `src/db/queries.ts`. Never import `@/db` anywhere else, never from a Client Component, and never add a generic query action/route.
+- New tables follow the existing pattern: `owner_id text not null`, composite FK `(trip_id, owner_id)` → `trips(id, owner_id)`, every query constrained by `owner_id`. Never FK into or migrate the `neon_auth` schema.
+- Schema changes: edit `src/db/schema.ts`, `npm run db:generate`, review the SQL, `npm run db:migrate`. No `drizzle-kit push` against real data.
+- Mutations are Server Actions in `src/app/actions/*`, validated with Zod in `src/lib/validation.ts`, wrapped in `guarded()`.
+- Booking times are local wall-clock values plus an IANA zone; do not convert them through UTC.
+- Run `npm run test:authz` (disposable DB) after touching queries or the DAL.
 - Update `docs/implementation-status.md` at the end of each stage.

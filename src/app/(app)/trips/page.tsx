@@ -3,11 +3,11 @@ import Image from "next/image";
 import { NewTripButton } from "@/components/new-trip-button";
 import { FlashToast } from "@/components/flash-toast";
 import { TripCard } from "@/components/trip-card";
-import { getTrips } from "@/lib/data";
+import { listTripsForUser } from "@/lib/dal";
 import { getCover } from "@/lib/covers";
 import { hourInTimeZone, todayInTimeZone, tripPhase } from "@/lib/dates";
 import { getViewerTimeZone } from "@/lib/timezone";
-import { requireUser } from "@/lib/user";
+import { requireUser } from "@/lib/dal";
 import type { Trip } from "@/lib/types";
 
 export const metadata: Metadata = { title: "My trips" };
@@ -56,7 +56,7 @@ function TripGroup({
 export default async function TripsPage({ searchParams }: PageProps<"/trips">) {
   const [user, trips, timeZone, params] = await Promise.all([
     requireUser(),
-    getTrips(),
+    listTripsForUser(),
     getViewerTimeZone(),
     searchParams,
   ]);

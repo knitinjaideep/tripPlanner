@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { documentHost, documentSource } from "@/lib/documents";
-import type { DocumentLink } from "@/lib/types";
+import type { TripDocument } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useTripWorkspace } from "./trip-workspace";
 
@@ -28,7 +28,7 @@ export function DocumentIcon({ url, className }: { url: string; className?: stri
 
 const SOURCE_LABEL = { drive: "Google Drive", docs: "Google Docs", sheets: "Google Sheets" } as const;
 
-export function DocumentRow({ doc, context }: { doc: DocumentLink; context?: string | null }) {
+export function DocumentRow({ doc, context }: { doc: TripDocument; context?: string | null }) {
   const { editDocument, removeDocument } = useTripWorkspace();
   const source = documentSource(doc.url);
   const sub = [source === "other" ? documentHost(doc.url) : SOURCE_LABEL[source], context].filter(Boolean).join(" · ");

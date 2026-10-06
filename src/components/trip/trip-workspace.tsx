@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteBooking } from "@/app/actions/bookings";
+import { deleteReservation } from "@/app/actions/reservations";
 import { deleteDocument } from "@/app/actions/documents";
 import {
   Dialog,
@@ -16,7 +16,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { secondaryButtonClass } from "@/components/forms/fields";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, stayNights } from "@/lib/booking-format";
-import type { Booking, BookingKind, DocumentLink } from "@/lib/types";
+import { readDetails } from "@/lib/reservation-details";
+import type { Reservation, ReservationKind, TripDocument } from "@/lib/types";
 import { BookingForm } from "./booking-form";
 import { BookingIcon } from "./booking-icon";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -27,17 +28,18 @@ import { DocumentRow } from "./document-row";
 type SheetState =
   | { open: false; mode?: undefined }
   | { open: true; mode: "view" | "edit"; bookingId: string }
-  | { open: true; mode: "create"; kind: BookingKind };
+  | { open: true; mode: "create"; kind: ReservationKind };
 
-type DocDialogState = { open: boolean; doc?: DocumentLink; bookingId?: string | null };
+type DocDialogState = { open: boolean; doc?: TripDocument; bookingId?: string | null };
 
 type Workspace = {
   tripId: string;
   viewBooking: (id: string) => void;
-  newBooking: (kind?: BookingKind) => void;
+  editBooking: (id: string) => void;
+  newBooking: (kind?: ReservationKind) => void;
   newDocument: (bookingId?: string | null) => void;
-  editDocument: (doc: DocumentLink) => void;
-  removeDocument: (doc: DocumentLink) => void;
+  editDocument: (doc: TripDocument) => void;
+  removeDocument: (doc: TripDocument) => void;
 };
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -56,19 +58,21 @@ export function useTripWorkspace() {
  */
 export function TripWorkspace({
   tripId,
+  tripTimeZone,
   bookings,
   documents,
   children,
 }: {
   tripId: string;
-  bookings: Booking[];
-  documents: DocumentLink[];
+  tripTimeZone: string;
+  bookings: Reservation[];
+  documents: TripDocument[];
   children: ReactNode;
 }) {
   const [sheet, setSheet] = useState<SheetState>({ open: false });
   const [docDialog, setDocDialog] = useState<DocDialogState>({ open: false });
   const [pendingDelete, setPendingDelete] = useState<
-    { type: "booking"; booking: Booking } | { type: "document"; doc: DocumentLink } | null
+    { type: "booking"; booking: Reservation } | { type: "document"; doc: TripDocument } | null
   >(null);
 
   const activeBooking = sheet.open && sheet.mode !== "create" ? bookings.find((b) => b.id === sheet.bookingId) : undefined;
@@ -76,6 +80,7 @@ export function TripWorkspace({
   const workspace: Workspace = {
     tripId,
     viewBooking: (id) => setSheet({ open: true, mode: "view", bookingId: id }),
+    editBooking: (id) => setSheet({ open: true, mode: "edit", bookingId: id }),
     newBooking: (kind = "flight") => setSheet({ open: true, mode: "create", kind }),
     newDocument: (bookingId = null) => setDocDialog({ open: true, bookingId }),
     editDocument: (doc) => setDocDialog({ open: true, doc }),
@@ -117,6 +122,7 @@ export function TripWorkspace({
             <BookingForm
               key={`create-${sheet.kind}`}
               tripId={tripId}
+              tripTimeZone={tripTimeZone}
               initialKind={sheet.kind}
               onCancel={closeSheet}
               onSaved={closeSheet}
@@ -127,6 +133,7 @@ export function TripWorkspace({
             <BookingForm
               key={`edit-${activeBooking.id}`}
               tripId={tripId}
+              tripTimeZone={tripTimeZone}
               booking={activeBooking}
               onCancel={() => setSheet({ open: true, mode: "view", bookingId: activeBooking.id })}
               onSaved={() => setSheet({ open: true, mode: "view", bookingId: activeBooking.id })}
@@ -136,7 +143,7 @@ export function TripWorkspace({
           {sheet.open && sheet.mode === "view" && activeBooking ? (
             <BookingDetails
               booking={activeBooking}
-              documents={documents.filter((d) => d.booking_id === activeBooking.id)}
+              documents={documents.filter((d) => d.reservation_id === activeBooking.id)}
               onEdit={() => setSheet({ open: true, mode: "edit", bookingId: activeBooking.id })}
               onDelete={() => setPendingDelete({ type: "booking", booking: activeBooking })}
               onAddDocument={() => workspace.newDocument(activeBooking.id)}
@@ -179,7 +186,7 @@ export function TripWorkspace({
         title={pendingDelete?.type === "booking" ? "Delete this booking?" : "Remove this link?"}
         description={
           pendingDelete?.type === "booking"
-            ? `“${pendingDelete.booking.title}” will be removed from this trip. Any document links attached to it stay on the trip.`
+            ? `“${pendingDelete.booking.title}” will be removed from this trip. Document links attached to it stay on the trip, and if it’s on your itinerary with notes or a review, that entry is kept.`
             : pendingDelete?.type === "document"
               ? `“${pendingDelete.doc.label}” will be removed from rove. The file itself is not touched.`
               : ""
@@ -189,7 +196,7 @@ export function TripWorkspace({
           if (!pendingDelete) return;
           const result =
             pendingDelete.type === "booking"
-              ? await deleteBooking(tripId, pendingDelete.booking.id)
+              ? await deleteReservation(tripId, pendingDelete.booking.id)
               : await deleteDocument(tripId, pendingDelete.doc.id);
           if (result.ok) {
             toast.success(result.message);
@@ -220,20 +227,26 @@ function BookingDetails({
   onDelete,
   onAddDocument,
 }: {
-  booking: Booking;
-  documents: DocumentLink[];
+  booking: Reservation;
+  documents: TripDocument[];
   onEdit: () => void;
   onDelete: () => void;
   onAddDocument: () => void;
 }) {
   const meta = BOOKING_KIND_META[b.kind];
-  const start = formatMoment(b.start_date, b.start_time);
-  const end = formatMoment(b.end_date, b.end_time);
+  const start = formatMoment(b.start_date, b.start_time, false, b.start_time_zone);
+  const end = formatMoment(b.end_date, b.end_time, false, b.end_time_zone);
   const nights = stayNights(b);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-6 sm:px-6">
+        {b.status === "cancelled" ? (
+          <p className="rounded-2xl border border-[#f3c6bf] bg-[#fff1ee] px-4 py-3 text-sm text-[#8c2b1f]">
+            <span className="font-semibold">Cancelled.</span> Kept for your records and hidden from the itinerary by
+            default. Edit the booking to restore it.
+          </p>
+        ) : null}
         {b.confirmation_code ? (
           <div className="flex items-center justify-between gap-3 rounded-2xl bg-sun px-4 py-3">
             <div className="min-w-0">
@@ -248,6 +261,11 @@ function BookingDetails({
 
         <dl className="divide-y divide-border rounded-2xl border border-border bg-surface px-4">
           {b.provider ? <Detail label={meta.providerLabel}>{b.provider}</Detail> : null}
+          {readDetails(b.kind, b.details).map((field) => (
+            <Detail key={field.key} label={field.label}>
+              <span className={field.mono ? "font-mono tracking-wide" : undefined}>{field.value}</span>
+            </Detail>
+          ))}
           {b.origin || b.destination ? (
             <Detail label="Route">
               {b.origin ?? "—"} → {b.destination ?? "—"}
@@ -325,7 +343,7 @@ export function AddBookingButton({
   children,
   className,
 }: {
-  kind?: BookingKind;
+  kind?: ReservationKind;
   children: ReactNode;
   className?: string;
 }) {

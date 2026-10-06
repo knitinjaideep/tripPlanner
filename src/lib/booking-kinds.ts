@@ -1,4 +1,4 @@
-import type { BookingKind } from "@/lib/types";
+import type { ReservationKind } from "@/lib/types";
 
 type KindMeta = {
   label: string;
@@ -11,13 +11,13 @@ type KindMeta = {
   providerLabel: string;
 };
 
-export const BOOKING_KIND_META: Record<BookingKind, KindMeta> = {
+export const BOOKING_KIND_META: Record<ReservationKind, KindMeta> = {
   flight: {
     label: "Flight",
     startLabel: "Departs",
     endLabel: "Arrives",
     route: true,
-    titlePlaceholder: "UA 1521",
+    titlePlaceholder: "Newark to Aruba",
     providerLabel: "Airline",
   },
   lodging: {

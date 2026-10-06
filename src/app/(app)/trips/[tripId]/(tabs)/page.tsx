@@ -1,27 +1,76 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
+  DayPlanCard,
   DocumentsCard,
   FlightCard,
   GlanceCard,
   NotesCard,
-  ReservationsCard,
+  PackingCard,
   StayCard,
 } from "@/components/trip/overview-cards";
-import { getTrip } from "@/lib/data";
+import { MomentsCard, TripMemoryCard } from "@/components/trip/memory-cards";
+import { getItineraryForUser, getMemoriesForUser, getPackingForUser, getTripForUser } from "@/lib/dal";
 import { todayInTimeZone } from "@/lib/dates";
+import { journalPhase } from "@/lib/memories";
 import { getViewerTimeZone } from "@/lib/timezone";
 
 export async function generateMetadata({ params }: PageProps<"/trips/[tripId]">): Promise<Metadata> {
-  const trip = await getTrip((await params).tripId);
+  const trip = await getTripForUser((await params).tripId);
   return { title: trip?.title ?? "Trip" };
 }
 
+/**
+ * The same cards in every phase — bookings, documents, the day plan and
+ * packing are always here — only their order and weight change:
+ * before → reservations and preparation; during → today's plan and quick
+ * access to bookings / documents; after → the reflection, favorites, album.
+ */
 export default async function TripOverviewPage({ params }: PageProps<"/trips/[tripId]">) {
   const { tripId } = await params;
-  const [trip, timeZone] = await Promise.all([getTrip(tripId), getViewerTimeZone()]);
-  if (!trip) notFound();
+  const [trip, items, packing, memories, timeZone] = await Promise.all([
+    getTripForUser(tripId),
+    getItineraryForUser(tripId),
+    getPackingForUser(tripId),
+    getMemoriesForUser(tripId),
+    getViewerTimeZone(),
+  ]);
+  if (!trip || !items || !packing || !memories) notFound();
   const today = todayInTimeZone(timeZone);
+  const todayInTripZone = todayInTimeZone(trip.time_zone);
+  const phase = journalPhase(trip.start_date, trip.end_date, todayInTripZone);
+
+  if (phase === "during") {
+    return (
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+        <h2 className="sr-only">Overview</h2>
+        <DayPlanCard trip={trip} items={items} todayInTripZone={todayInTripZone} />
+        <DocumentsCard trip={trip} />
+        <FlightCard trip={trip} today={today} />
+        <StayCard trip={trip} today={today} />
+        <GlanceCard trip={trip} />
+        <MomentsCard tripId={trip.id} visits={items} className="lg:col-span-5" />
+        <PackingCard tripId={trip.id} categories={packing} wide={false} className="lg:col-span-7" />
+        {trip.notes ? <NotesCard notes={trip.notes} /> : null}
+      </div>
+    );
+  }
+
+  if (phase === "after") {
+    return (
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+        <h2 className="sr-only">Overview</h2>
+        <TripMemoryCard tripId={trip.id} memory={memories.memory} visits={items} className="lg:col-span-8" />
+        <DocumentsCard trip={trip} />
+        <FlightCard trip={trip} today={today} />
+        <StayCard trip={trip} today={today} />
+        <GlanceCard trip={trip} />
+        <DayPlanCard trip={trip} items={items} todayInTripZone={todayInTripZone} className="lg:col-span-12" />
+        <PackingCard tripId={trip.id} categories={packing} wide={!trip.notes} />
+        {trip.notes ? <NotesCard notes={trip.notes} beside /> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
@@ -29,9 +78,10 @@ export default async function TripOverviewPage({ params }: PageProps<"/trips/[tr
       <FlightCard trip={trip} today={today} />
       <StayCard trip={trip} today={today} />
       <GlanceCard trip={trip} />
-      <ReservationsCard trip={trip} today={today} />
+      <DayPlanCard trip={trip} items={items} todayInTripZone={todayInTripZone} />
       <DocumentsCard trip={trip} />
-      {trip.notes ? <NotesCard notes={trip.notes} /> : null}
+      <PackingCard tripId={trip.id} categories={packing} wide={!trip.notes} />
+      {trip.notes ? <NotesCard notes={trip.notes} beside /> : null}
     </div>
   );
 }

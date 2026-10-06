@@ -6,7 +6,7 @@ import { daysUntil, formatDateRange, tripLengthDays, tripPhase } from "@/lib/dat
 import type { Trip } from "@/lib/types";
 import { TripActions } from "./trip-actions";
 
-function statusLabel(trip: Trip, today: string) {
+export function statusLabel(trip: Trip, today: string) {
   const phase = tripPhase(trip.start_date, trip.end_date, today);
   if (phase === "past") return "Trip complete";
   if (phase === "current") {

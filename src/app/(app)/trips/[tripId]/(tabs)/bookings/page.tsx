@@ -4,17 +4,17 @@ import { FileText, Plus } from "lucide-react";
 import { BookingSummaryRow } from "@/components/trip/overview-cards";
 import { DocumentRow } from "@/components/trip/document-row";
 import { AddBookingButton, AddDocumentButton } from "@/components/trip/trip-workspace";
-import { getTrip } from "@/lib/data";
+import { getTripForUser } from "@/lib/dal";
 import { daysUntil, formatDayDate } from "@/lib/dates";
-import type { Booking } from "@/lib/types";
+import type { Reservation } from "@/lib/types";
 
 export async function generateMetadata({ params }: PageProps<"/trips/[tripId]/bookings">): Promise<Metadata> {
-  const trip = await getTrip((await params).tripId);
+  const trip = await getTripForUser((await params).tripId);
   return { title: trip ? `Bookings · ${trip.title}` : "Bookings" };
 }
 
-function groupByDay(bookings: Booking[]) {
-  const groups = new Map<string, Booking[]>();
+function groupByDay(bookings: Reservation[]) {
+  const groups = new Map<string, Reservation[]>();
   for (const b of bookings) {
     const key = b.start_date ?? "unscheduled";
     groups.set(key, [...(groups.get(key) ?? []), b]);
@@ -24,11 +24,11 @@ function groupByDay(bookings: Booking[]) {
 
 export default async function TripBookingsPage({ params }: PageProps<"/trips/[tripId]/bookings">) {
   const { tripId } = await params;
-  const trip = await getTrip(tripId);
+  const trip = await getTripForUser(tripId);
   if (!trip) notFound();
 
-  const groups = groupByDay(trip.bookings);
-  const titles = new Map(trip.bookings.map((b) => [b.id, b.title]));
+  const groups = groupByDay(trip.reservations);
+  const titles = new Map(trip.reservations.map((b) => [b.id, b.title]));
 
   return (
     <div className="grid gap-10 lg:grid-cols-12 lg:gap-8">
@@ -39,9 +39,9 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
               Bookings
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {trip.bookings.length === 0
+              {trip.reservations.length === 0
                 ? "Nothing saved yet."
-                : `${trip.bookings.length} ${trip.bookings.length === 1 ? "reservation" : "reservations"}, in order. Times are local.`}
+                : `${trip.reservations.length} ${trip.reservations.length === 1 ? "reservation" : "reservations"}, in order. Times are local.`}
             </p>
           </div>
           <AddBookingButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-coral px-5 text-[0.9375rem] font-semibold text-white hover:bg-coral-hover">
@@ -98,17 +98,17 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
               <Plus className="size-4" aria-hidden="true" /> Add link
             </AddDocumentButton>
           </div>
-          {trip.document_links.length === 0 ? (
+          {trip.documents.length === 0 ? (
             <p className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-[#4f4a63]">
               No links yet. Add a Drive folder for the whole trip, or attach files to a specific booking.
             </p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {trip.document_links.map((d) => (
+              {trip.documents.map((d) => (
                 <DocumentRow
                   key={d.id}
                   doc={d}
-                  context={d.booking_id ? titles.get(d.booking_id) : "Whole trip"}
+                  context={d.reservation_id ? titles.get(d.reservation_id) : "Whole trip"}
                 />
               ))}
             </ul>

@@ -1,8 +1,8 @@
 import { BedDouble, Bookmark, Car, Plane, Ticket, TrainFront, UtensilsCrossed, type LucideIcon } from "lucide-react";
-import type { BookingKind } from "@/lib/types";
+import type { ReservationKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export const BOOKING_ICONS: Record<BookingKind, LucideIcon> = {
+export const BOOKING_ICONS: Record<ReservationKind, LucideIcon> = {
   flight: Plane,
   lodging: BedDouble,
   car: Car,
@@ -12,7 +12,7 @@ export const BOOKING_ICONS: Record<BookingKind, LucideIcon> = {
   other: Bookmark,
 };
 
-const TINTS: Record<BookingKind, string> = {
+const TINTS: Record<ReservationKind, string> = {
   flight: "bg-teal-soft text-teal-ink",
   lodging: "bg-lavender text-lavender-ink",
   car: "bg-[#e8f0fb] text-[#2d5a96]",
@@ -22,7 +22,7 @@ const TINTS: Record<BookingKind, string> = {
   other: "bg-secondary text-ink",
 };
 
-export function BookingIcon({ kind, className }: { kind: BookingKind; className?: string }) {
+export function BookingIcon({ kind, className }: { kind: ReservationKind; className?: string }) {
   const Icon = BOOKING_ICONS[kind];
   return (
     <span className={cn("grid size-10 shrink-0 place-items-center rounded-full", TINTS[kind], className)}>

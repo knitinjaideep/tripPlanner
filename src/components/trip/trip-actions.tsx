@@ -11,16 +11,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "./confirm-dialog";
 
-export function TripActions({ tripId, title }: { tripId: string; title: string }) {
+export function TripActions({ tripId, title, className }: { tripId: string; title: string; className?: string }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="focus-ring grid size-11 place-items-center rounded-xl bg-white/90 text-ink shadow-sm backdrop-blur hover:bg-white"
+          className={cn(
+            "focus-ring grid size-11 shrink-0 place-items-center rounded-xl bg-white/90 text-ink shadow-sm backdrop-blur hover:bg-white",
+            className,
+          )}
           aria-label="Trip options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />

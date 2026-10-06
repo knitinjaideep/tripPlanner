@@ -1,10 +1,10 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
-import { isSupabaseConfigured } from "@/lib/env";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { getAuth, NEON_AUTH_COOKIE_PREFIX } from "@/lib/auth/server";
 
 export type CurrentUser = {
+  /** Stable Neon Auth user ID — the only value used for authorization. */
   id: string;
   email: string | null;
   displayName: string;
@@ -15,35 +15,53 @@ export type CurrentUser = {
 
 function initialsFrom(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : name.slice(0, 2);
+  if (parts.length === 0) return "?";
+  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : parts[0].slice(0, 2);
   return letters.toUpperCase();
 }
 
+/** Thrown when Neon Auth cannot be reached to verify a session. */
+export class SessionUnavailableError extends Error {
+  constructor() {
+    super("We couldn’t verify your session right now. Please try again in a moment.");
+  }
+}
+
 /**
- * The verified signed-in user (JWT validated by getClaims), or null.
- * Profile fields (name, avatar) come from Google via user_metadata and are
- * used for display only — never for authorization.
+ * The verified signed-in user, or null.
+ *
+ * Neon Auth's server `getSession()` accepts the session only if the signed
+ * session-data cookie verifies against NEON_AUTH_COOKIE_SECRET, or if Neon
+ * Auth itself confirms the session token. Memoized per request with React
+ * `cache` — never across requests or users.
+ *
+ * Name, email and photo come from Google via Neon Auth and are display-only.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  if (!isSupabaseConfigured()) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  if (error || !claims?.sub) return null;
+  const auth = getAuth();
+  if (!auth) return null;
 
-  const meta = (claims.user_metadata ?? {}) as Record<string, unknown>;
-  const email = typeof claims.email === "string" ? claims.email : null;
-  const name =
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    (typeof meta.name === "string" && meta.name) ||
-    (email ? email.split("@")[0] : "Traveler");
-  const avatar =
-    (typeof meta.avatar_url === "string" && meta.avatar_url) ||
-    (typeof meta.picture === "string" && meta.picture) ||
-    null;
+  // No session token cookie → signed out; no need to ask Neon Auth.
+  const hasToken = (await cookies())
+    .getAll()
+    .some((c) => c.name.startsWith(NEON_AUTH_COOKIE_PREFIX) && c.name.endsWith(".session_token"));
+  if (!hasToken) return null;
+
+  const { data, error } = await auth.getSession();
+  if (error) {
+    // 5xx / network: don't silently sign the user out.
+    if ((error.status ?? 0) >= 500) throw new SessionUnavailableError();
+    return null;
+  }
+  const user = data?.user;
+  if (!data?.session || !user?.id) return null;
+
+  const email = typeof user.email === "string" && user.email ? user.email : null;
+  const name = (typeof user.name === "string" && user.name.trim()) || (email ? email.split("@")[0] : "Traveler");
+  const avatar = typeof user.image === "string" && /^https:\/\//.test(user.image) ? user.image : null;
 
   return {
-    id: claims.sub,
+    id: user.id,
     email,
     displayName: name,
     firstName: name.split(/\s+/)[0],
@@ -51,9 +69,3 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     initials: initialsFrom(name),
   };
 });
-
-export async function requireUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  return user;
-}

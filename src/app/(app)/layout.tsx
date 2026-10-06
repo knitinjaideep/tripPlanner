@@ -1,13 +1,15 @@
 import { connection } from "next/server";
 import { SiteHeader } from "@/components/site-header";
 import { SetupNotice } from "@/components/setup-notice";
-import { isSupabaseConfigured } from "@/lib/env";
-import { requireUser } from "@/lib/user";
+import { missingConfig } from "@/lib/env";
+import { requireUser } from "@/lib/dal";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   // Always per-request: auth and env are runtime concerns, never prerendered.
   await connection();
-  if (!isSupabaseConfigured()) return <SetupNotice />;
+  const missing = missingConfig();
+  if (missing.length > 0) return <SetupNotice missing={missing} />;
+  // For the header only. Every page and action re-verifies through the DAL.
   const user = await requireUser();
 
   return (

@@ -1,11 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BedDouble, FileText, MapPin, Plane, Plus } from "lucide-react";
+import { ArrowRight, BedDouble, FileText, Luggage, MapPin, Plane, Plus } from "lucide-react";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
-import { formatMoment, looksLikeCode, placeSummary, stayNights, upcomingFirst } from "@/lib/booking-format";
+import { formatMoment, formatZonedTime, looksLikeCode, placeSummary, stayNights, upcomingFirst } from "@/lib/booking-format";
+import { entryClock, entryLabel, itineraryHref } from "@/lib/itinerary-format";
+import { agendaCategory, agendaTitle, buildAgenda, previewDay, splitDay } from "@/lib/schedule";
+import { CategoryIcon } from "@/components/itinerary/category-icon";
 import { getCover } from "@/lib/covers";
-import { formatDayDate, formatTime, tripLengthDays } from "@/lib/dates";
-import type { Booking, DocumentLink, TripWithDetails } from "@/lib/types";
+import { formatDayDate, tripLengthDays } from "@/lib/dates";
+import { detailValue } from "@/lib/reservation-details";
+import { progressOf } from "@/lib/packing";
+import type { ItineraryEntry, PackingCategoryWithItems, Reservation, TripDocument, TripWithDetails } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BookingIcon } from "./booking-icon";
 import { CopyButton } from "./copy-button";
@@ -52,11 +57,13 @@ function Airport({ value, align }: { value: string | null; align: "left" | "righ
 function FlightMoment({
   date,
   time,
+  timeZone,
   align = "left",
   fallback,
 }: {
   date: string | null;
   time: string | null;
+  timeZone: string | null;
   align?: "left" | "right";
   fallback?: string;
 }) {
@@ -65,7 +72,7 @@ function FlightMoment({
       {date ? (
         <>
           {formatDayDate(date)}
-          {time ? <span className="block font-medium text-ink">{formatTime(time)}</span> : null}
+          {time ? <span className="block font-medium text-ink">{formatZonedTime(date, time, timeZone)}</span> : null}
         </>
       ) : (
         fallback
@@ -74,13 +81,13 @@ function FlightMoment({
   );
 }
 
-export function FlightCard({ trip, today }: { trip: TripWithDetails; today: string }) {
-  const flights = trip.bookings.filter((b) => b.kind === "flight");
+export function FlightCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+  const flights = trip.reservations.filter((b) => b.kind === "flight" && b.status !== "cancelled");
   const flight = upcomingFirst(flights, today);
 
   if (!flight) {
     return (
-      <article className="card-surface flex flex-col p-6 md:col-span-1 lg:col-span-5">
+      <article className={cn("card-surface flex flex-col p-6 md:col-span-1 lg:col-span-5", className)}>
         <CardEyebrow icon={Plane}>Flights</CardEyebrow>
         <div className="flex flex-1 flex-col items-start justify-center gap-3 py-6">
           <h2 className="font-display text-2xl font-semibold text-ink">No flights saved yet</h2>
@@ -95,11 +102,12 @@ export function FlightCard({ trip, today }: { trip: TripWithDetails; today: stri
     );
   }
 
-  const departs = formatMoment(flight.start_date, flight.start_time);
+  const departs = formatMoment(flight.start_date, flight.start_time, false, flight.start_time_zone);
   const hasRoute = Boolean(flight.origin || flight.destination);
+  const flightNumber = detailValue("flight", flight.details, "flight_number");
 
   return (
-    <article className="card-surface relative flex flex-col p-6 md:col-span-1 lg:col-span-5">
+    <article className={cn("card-surface relative flex flex-col p-6 md:col-span-1 lg:col-span-5", className)}>
       <div className="flex items-center justify-between gap-3">
         <CardEyebrow icon={Plane}>
           Flight{flights.length > 1 ? ` · ${flights.indexOf(flight) + 1} of ${flights.length}` : ""}
@@ -122,9 +130,14 @@ export function FlightCard({ trip, today }: { trip: TripWithDetails; today: stri
           <div className="min-w-0">
             <Airport value={flight.destination} align="right" />
           </div>
-          <FlightMoment date={flight.start_date} time={flight.start_time} fallback="Departure not set" />
+          <FlightMoment
+            date={flight.start_date}
+            time={flight.start_time}
+            timeZone={flight.start_time_zone}
+            fallback="Departure not set"
+          />
           <span aria-hidden="true" />
-          <FlightMoment date={flight.end_date} time={flight.end_time} align="right" />
+          <FlightMoment date={flight.end_date} time={flight.end_time} timeZone={flight.end_time_zone} align="right" />
           <p className="sr-only">
             From {flight.origin ?? "unknown"} to {flight.destination ?? "unknown"}
           </p>
@@ -145,9 +158,11 @@ export function FlightCard({ trip, today }: { trip: TripWithDetails; today: stri
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-ink">{flight.provider ?? flight.title}</p>
+          <p className="truncate font-semibold text-ink">
+            {[flight.provider, flightNumber].filter(Boolean).join(" ") || flight.title}
+          </p>
           <p className="truncate text-sm text-muted-foreground">
-            {flight.provider ? flight.title : BOOKING_KIND_META.flight.label}
+            {flight.provider || flightNumber ? flight.title : BOOKING_KIND_META.flight.label}
           </p>
         </div>
         {flight.confirmation_code ? (
@@ -172,13 +187,13 @@ export function FlightCard({ trip, today }: { trip: TripWithDetails; today: stri
 /* Stay — photographic card (illustrative destination photo)          */
 /* ------------------------------------------------------------------ */
 
-export function StayCard({ trip, today }: { trip: TripWithDetails; today: string }) {
-  const stays = trip.bookings.filter((b) => b.kind === "lodging");
+export function StayCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+  const stays = trip.reservations.filter((b) => b.kind === "lodging" && b.status !== "cancelled");
   const stay = upcomingFirst(stays, today);
 
   if (!stay) {
     return (
-      <article className="card-surface flex flex-col bg-[#f2f8f8] p-6 md:col-span-1 lg:col-span-4">
+      <article className={cn("card-surface flex flex-col bg-[#f2f8f8] p-6 md:col-span-1 lg:col-span-4", className)}>
         <CardEyebrow icon={BedDouble}>Accommodation</CardEyebrow>
         <div className="flex flex-1 flex-col items-start justify-center gap-3 py-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Where are you staying?</h2>
@@ -198,7 +213,7 @@ export function StayCard({ trip, today }: { trip: TripWithDetails; today: string
   const sub = [nights ? (nights === 1 ? "1 night" : `${nights} nights`) : null, stay.location].filter(Boolean).join(" · ");
 
   return (
-    <article className="group relative isolate flex min-h-[19rem] flex-col justify-between overflow-hidden rounded-2xl bg-[#0b2a3a] p-5 text-white md:col-span-1 lg:col-span-4">
+    <article className={cn("group relative isolate flex min-h-[19rem] flex-col justify-between overflow-hidden rounded-2xl bg-[#0b2a3a] p-5 text-white md:col-span-1 lg:col-span-4", className)}>
       <Image src={cover.image} alt="" fill sizes="(min-width: 1024px) 420px, (min-width: 768px) 50vw, 100vw" className="-z-10 object-cover" style={{ objectPosition: cover.position }} />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#08263a]/85 via-[#08263a]/20 to-[#08263a]/10" />
 
@@ -219,7 +234,7 @@ export function StayCard({ trip, today }: { trip: TripWithDetails; today: string
         <h2 className="font-display text-[1.75rem] leading-tight font-semibold drop-shadow-sm">{stay.title}</h2>
         {sub ? <p className="mt-1 text-[0.9375rem] text-white/90">{sub}</p> : null}
         {stay.start_date ? (
-          <p className="mt-1 text-sm text-white/80">Check-in {formatMoment(stay.start_date, stay.start_time, true)}</p>
+          <p className="mt-1 text-sm text-white/80">Check-in {formatMoment(stay.start_date, stay.start_time, true, stay.start_time_zone)}</p>
         ) : null}
         <p className="mt-3 text-[0.6875rem] text-white/65">Illustrative destination photo</p>
       </div>
@@ -231,17 +246,17 @@ export function StayCard({ trip, today }: { trip: TripWithDetails; today: string
 /* At a glance — pale yellow                                           */
 /* ------------------------------------------------------------------ */
 
-export function GlanceCard({ trip }: { trip: TripWithDetails }) {
-  const bookings = trip.bookings.length;
-  const docs = trip.document_links.length;
+export function GlanceCard({ trip, className }: { trip: TripWithDetails; className?: string }) {
+  const bookings = trip.reservations.length;
+  const docs = trip.documents.length;
   const days = tripLengthDays(trip.start_date, trip.end_date);
-  const missingCodes = trip.bookings.filter((b) => !b.confirmation_code).length;
+  const missingCodes = trip.reservations.filter((b) => !b.confirmation_code && b.status !== "cancelled").length;
 
   const headline =
     bookings === 0 ? "Let’s gather the details." : missingCodes > 0 ? "Nearly organized." : "All booked and noted.";
 
   return (
-    <article className="flex flex-col rounded-2xl bg-sun p-6 md:col-span-2 lg:col-span-3">
+    <article className={cn("flex flex-col rounded-2xl bg-sun p-6 md:col-span-2 lg:col-span-3", className)}>
       <p className="eyebrow text-[#6b5200]">At a glance</p>
       <h2 className="font-display mt-3 text-[1.75rem] leading-tight font-semibold text-ink">{headline}</h2>
       <dl className="mt-5 grid grid-cols-3 gap-2 md:max-w-md lg:max-w-none">
@@ -274,59 +289,93 @@ export function GlanceCard({ trip }: { trip: TripWithDetails }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Reservations timeline                                               */
+/* Day plan — preview of the merged itinerary                          */
 /* ------------------------------------------------------------------ */
 
-export function ReservationsCard({ trip, today }: { trip: TripWithDetails; today: string }) {
-  const dated = trip.bookings.filter((b) => b.start_date);
-  const upcoming = dated.filter((b) => (b.end_date ?? b.start_date)! >= today);
-  const list: Booking[] = (upcoming.length > 0 ? upcoming : dated).slice(0, 3);
-  const title = upcoming.length > 0 ? "Coming up" : dated.length > 0 ? "Your reservations" : "Reservations";
+const PREVIEW_LIMIT = 4;
+
+export function DayPlanCard({
+  trip,
+  items,
+  todayInTripZone,
+  className,
+}: {
+  trip: TripWithDetails;
+  items: ItineraryEntry[];
+  todayInTripZone: string;
+  className?: string;
+}) {
+  // Same merge as the Itinerary tab: a booking shows once, cancelled ones are left out.
+  const agenda = buildAgenda({ items, reservations: trip.reservations, tripStart: trip.start_date, tripEnd: trip.end_date });
+  const date = previewDay(trip.start_date, trip.end_date, todayInTripZone);
+  const day = agenda.days.find((d) => d.date === date) ?? agenda.days[0];
+  const { timed, flexible } = splitDay(day.entries);
+  const entries = [...timed, ...flexible];
+  const shown = entries.slice(0, PREVIEW_LIMIT);
+  const more = entries.length - shown.length;
+  const href = itineraryHref(trip.id, day.date);
+  const heading =
+    todayInTripZone < trip.start_date ? "First day" : todayInTripZone > trip.end_date ? "Last day" : "Today’s plan";
 
   return (
-    <article className="card-surface p-6 md:col-span-2 lg:col-span-8">
+    <article className={cn("card-surface p-6 md:col-span-2 lg:col-span-8", className)}>
       <div className="flex items-center justify-between gap-3">
-        <p className="eyebrow text-ink">{title}</p>
-        <Link href={`/trips/${trip.id}/bookings`} className={linkButton}>
-          View all bookings <ArrowRight className="size-4" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="eyebrow text-ink">{heading}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Day {day.dayNumber} · {formatDayDate(day.date)}
+          </p>
+        </div>
+        <Link href={href} className={linkButton}>
+          Open itinerary <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
       </div>
 
-      {list.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="mt-5 flex flex-col items-start gap-4 rounded-xl border border-dashed border-input p-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            {trip.bookings.length > 0
-              ? "Add dates to your bookings to see them in order here."
-              : "Restaurants, tours, car rentals — anything with a confirmation belongs here."}
-          </p>
-          <AddBookingButton kind="activity" className={outlineButton}>
-            <Plus className="size-4" aria-hidden="true" /> Add a booking
-          </AddBookingButton>
+          <p className="text-sm text-muted-foreground">Nothing planned yet. Leave it open or add something to look forward to.</p>
+          <Link href={href} className={outlineButton}>
+            <Plus className="size-4" aria-hidden="true" /> Plan this day
+          </Link>
         </div>
       ) : (
-        <ol className="mt-5 grid gap-x-6 gap-y-5 md:grid-cols-3">
-          {list.map((b, i) => (
-            <li key={b.id} className="relative">
-              <ViewBookingButton
-                bookingId={b.id}
-                className="focus-ring group flex w-full items-start gap-3 rounded-xl p-1 text-left hover:bg-secondary/60"
-              >
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-teal-ink text-sm font-semibold text-white">
-                  {i + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-ink group-hover:text-teal-ink">{b.title}</span>
-                  <span className="mt-0.5 block text-sm text-ink">{formatMoment(b.start_date, b.start_time, true)}</span>
-                  <span className="mt-1 block truncate text-sm text-muted-foreground">
-                    {BOOKING_KIND_META[b.kind].label}
-                    {placeSummary(b) ? ` · ${placeSummary(b)}` : ""}
+        <ol className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2">
+          {shown.map((e) => {
+            const clock = entryClock(e);
+            const label = entryLabel(e);
+            const done = e.item?.status === "completed";
+            return (
+              <li key={e.key}>
+                <Link href={href} className="focus-ring group flex items-start gap-3 rounded-xl p-1.5 hover:bg-secondary/60">
+                  <CategoryIcon category={agendaCategory(e)} kind={e.reservation?.kind} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-ink">
+                      {clock ? (
+                        <>
+                          {clock.time}
+                          {clock.zone ? <span className="font-normal text-muted-foreground"> {clock.zone}</span> : null}
+                        </>
+                      ) : (
+                        <span className="font-normal text-muted-foreground">Flexible</span>
+                      )}
+                      {done ? <span className="ml-2 text-xs font-semibold text-teal-ink">Done</span> : null}
+                    </span>
+                    <span className="block truncate font-semibold text-ink group-hover:text-teal-ink">
+                      {label ? <span className="font-medium text-muted-foreground">{label} · </span> : null}
+                      {agendaTitle(e)}
+                    </span>
                   </span>
-                </span>
-              </ViewBookingButton>
-            </li>
-          ))}
+                </Link>
+              </li>
+            );
+          })}
         </ol>
       )}
+      {more > 0 ? (
+        <Link href={href} className={cn(linkButton, "mt-2")}>
+          {more} more on this day <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      ) : null}
     </article>
   );
 }
@@ -335,13 +384,13 @@ export function ReservationsCard({ trip, today }: { trip: TripWithDetails; today
 /* Travel documents — pale lavender                                    */
 /* ------------------------------------------------------------------ */
 
-export function DocumentsCard({ trip, limit = 4 }: { trip: TripWithDetails; limit?: number }) {
-  const titles = new Map(trip.bookings.map((b) => [b.id, b.title]));
-  const docs: DocumentLink[] = trip.document_links.slice(0, limit);
-  const more = trip.document_links.length - docs.length;
+export function DocumentsCard({ trip, limit = 4, className }: { trip: TripWithDetails; limit?: number; className?: string }) {
+  const titles = new Map(trip.reservations.map((b) => [b.id, b.title]));
+  const docs: TripDocument[] = trip.documents.slice(0, limit);
+  const more = trip.documents.length - docs.length;
 
   return (
-    <article className="rounded-2xl bg-lavender p-5 sm:p-6 md:col-span-2 lg:col-span-4">
+    <article className={cn("rounded-2xl bg-lavender p-5 sm:p-6 md:col-span-2 lg:col-span-4", className)}>
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow flex items-center gap-2 text-lavender-ink">
           <FileText className="size-4" aria-hidden="true" /> Travel documents
@@ -357,7 +406,7 @@ export function DocumentsCard({ trip, limit = 4 }: { trip: TripWithDetails; limi
       ) : (
         <ul className="mt-3 space-y-2">
           {docs.map((d) => (
-            <DocumentRow key={d.id} doc={d} context={d.booking_id ? titles.get(d.booking_id) : null} />
+            <DocumentRow key={d.id} doc={d} context={d.reservation_id ? titles.get(d.reservation_id) : null} />
           ))}
         </ul>
       )}
@@ -373,16 +422,83 @@ export function DocumentsCard({ trip, limit = 4 }: { trip: TripWithDetails; limi
   );
 }
 
-export function NotesCard({ notes }: { notes: string }) {
+/* ------------------------------------------------------------------ */
+/* Packing — progress from the saved checklist                         */
+/* ------------------------------------------------------------------ */
+
+export function PackingCard({
+  tripId,
+  categories,
+  wide,
+  className,
+}: {
+  tripId: string;
+  categories: PackingCategoryWithItems[];
+  /** Full row (no notes card beside it). */
+  wide: boolean;
+  className?: string;
+}) {
+  const p = progressOf(categories.flatMap((c) => c.items));
+  const href = `/trips/${tripId}/packing`;
+  const left = categories
+    .map((c) => ({ name: c.name, n: c.items.filter((i) => !i.is_packed).length }))
+    .filter((c) => c.n > 0)
+    .slice(0, 3);
+
   return (
-    <article className="card-surface p-6 md:col-span-2 lg:col-span-12">
+    <article className={cn("card-surface relative p-6 md:col-span-2", wide ? "lg:col-span-12" : "lg:col-span-4", className)}>
+      <div className="flex items-center justify-between gap-3">
+        <CardEyebrow icon={Luggage}>Packing</CardEyebrow>
+        {p.total > 0 ? <ArrowRight className="size-4 text-teal-ink" aria-hidden="true" /> : null}
+      </div>
+      {p.total === 0 ? (
+        <div className={cn("mt-4 flex flex-col items-start gap-4", wide && "sm:flex-row sm:items-center sm:justify-between")}>
+          <p className="text-sm text-muted-foreground">
+            {categories.length ? "Your categories are ready — add what to bring." : "One checklist for everyone, ticked off as you go."}
+          </p>
+          <Link href={href} className={cn(outlineButton, "after:absolute after:inset-0 after:rounded-2xl")}>
+            <Plus className="size-4" aria-hidden="true" /> Start packing list
+          </Link>
+        </div>
+      ) : (
+        <div className={cn("mt-4", wide && "sm:flex sm:items-end sm:justify-between sm:gap-8")}>
+          <div className={cn(wide && "sm:max-w-md sm:flex-1")}>
+            <p className="font-display text-[1.75rem] leading-tight font-semibold text-ink">
+              {p.remaining === 0 ? "All packed" : `${p.packed} of ${p.total} packed`}
+            </p>
+            <span className="mt-3 block h-2 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
+              <span className="block h-full rounded-full bg-teal-ink" style={{ width: `${p.percent}%` }} />
+            </span>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {p.percent}%{p.remaining ? ` · ${p.remaining} still to pack` : " · every item checked off"}
+            </p>
+          </div>
+          {left.length ? (
+            <p className="mt-3 truncate text-sm text-ink sm:mt-0">
+              {left.map((c) => `${c.name} ${c.n}`).join(" · ")}
+            </p>
+          ) : null}
+          <Link href={href} className="after:absolute after:inset-0 after:rounded-2xl focus-ring rounded-sm">
+            <span className="sr-only">
+              Open packing list — {p.packed} of {p.total} packed
+            </span>
+          </Link>
+        </div>
+      )}
+    </article>
+  );
+}
+
+export function NotesCard({ notes, beside, className }: { notes: string; beside?: boolean; className?: string }) {
+  return (
+    <article className={cn("card-surface p-6 md:col-span-2", beside ? "lg:col-span-8" : "lg:col-span-12", className)}>
       <p className="eyebrow text-ink">Trip notes</p>
       <p className="mt-3 max-w-3xl leading-relaxed whitespace-pre-line text-muted-foreground">{notes}</p>
     </article>
   );
 }
 
-export function BookingSummaryRow({ booking: b }: { booking: Booking }) {
+export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
   const place = placeSummary(b);
   return (
     <div className="card-surface flex items-center gap-2 p-2 pr-2 sm:pr-3">
@@ -394,9 +510,16 @@ export function BookingSummaryRow({ booking: b }: { booking: Booking }) {
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             {BOOKING_KIND_META[b.kind].label}
-            {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true)?.split(" · ")[1]}` : ""}
+            {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true, b.start_time_zone)?.split(" · ")[1]}` : ""}
           </span>
-          <span className="block truncate font-semibold text-ink group-hover:text-teal-ink">{b.title}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={cn("truncate font-semibold text-ink group-hover:text-teal-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>
+              {b.title}
+            </span>
+            {b.status === "cancelled" ? (
+              <span className="shrink-0 rounded-full bg-[#fff1ee] px-2 py-0.5 text-xs font-semibold text-[#8c2b1f]">Cancelled</span>
+            ) : null}
+          </span>
           {place || b.provider ? (
             <span className="flex items-center gap-1 truncate text-sm text-muted-foreground">
               {place ? <MapPin className="size-3.5 shrink-0" aria-hidden="true" /> : null}

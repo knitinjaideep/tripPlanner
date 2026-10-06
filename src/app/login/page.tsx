@@ -1,22 +1,50 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { AlertCircle, Settings2 } from "lucide-react";
+import { redirect } from "next/navigation";
+import { AlertCircle, CheckCircle2, Settings2 } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { getCover } from "@/lib/covers";
-import { isSupabaseConfigured } from "@/lib/env";
+import { safeNextPath } from "@/lib/auth/redirects";
+import { missingConfig } from "@/lib/env";
+import { getCurrentUser, SessionUnavailableError } from "@/lib/user";
 import { GoogleSignInButton } from "./google-button";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 const ERRORS: Record<string, string> = {
   provider: "Google sign-in was cancelled or didn’t complete. Please try again.",
-  callback: "We couldn’t finish signing you in. The link may have expired — please try again.",
+  callback: "We couldn’t finish signing you in. The sign-in link may have expired — please try again.",
+  session: "We couldn’t check your session just now. Please try again in a moment.",
 };
 
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { error } = await searchParams;
-  const errorMessage = typeof error === "string" ? (ERRORS[error] ?? ERRORS.callback) : null;
-  const configured = isSupabaseConfigured();
+  const params = await searchParams;
+  const error = first(params.error);
+  const next = safeNextPath(first(params.next));
+  const missing = missingConfig();
+  const configured = missing.length === 0;
+
+  let sessionCheckFailed = false;
+  if (configured) {
+    try {
+      // Already signed in? Skip the login screen.
+      if (await getCurrentUser()) redirect(next);
+    } catch (e) {
+      if (!(e instanceof SessionUnavailableError)) throw e;
+      sessionCheckFailed = true;
+    }
+  }
+
+  const errorMessage = sessionCheckFailed
+    ? ERRORS.session
+    : error
+      ? (ERRORS[error] ?? ERRORS.callback)
+      : first(params.reason) === "expired"
+        ? "Your session has ended. Please sign in again to continue."
+        : null;
+  const notice = !errorMessage && first(params.signed_out) ? "You’re signed out. See you on the next trip." : null;
   const cover = getCover("beach");
 
   return (
@@ -66,17 +94,23 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                 <p>{errorMessage}</p>
               </div>
             ) : null}
+            {notice ? (
+              <div role="status" className="flex gap-3 rounded-xl border border-border bg-teal-soft/60 p-4 text-sm text-teal-ink">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <p>{notice}</p>
+              </div>
+            ) : null}
 
             {configured ? (
-              <GoogleSignInButton />
+              <GoogleSignInButton next={next} />
             ) : (
               <div className="rounded-xl border border-border bg-sun/60 p-4 text-sm text-ink">
                 <p className="flex items-center gap-2 font-semibold">
                   <Settings2 className="size-4" aria-hidden="true" /> Almost ready
                 </p>
                 <p className="mt-1.5 text-muted-foreground">
-                  Sign-in needs Supabase settings in <code className="font-mono text-ink">.env.local</code>. See{" "}
-                  <code className="font-mono text-ink">docs/setup.md</code>.
+                  Sign-in needs {missing.join(", ")} in <code className="font-mono text-ink">.env.local</code>.
+                  See <code className="font-mono text-ink">docs/local-setup.md</code>.
                 </p>
               </div>
             )}

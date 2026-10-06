@@ -2,21 +2,35 @@
   "name": "rove",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:migrate": "drizzle-kit migrate",
+    "test:authz": "tsx --conditions=react-server scripts/test-authorization.ts",
+    "test:itinerary": "tsx scripts/test-itinerary.ts",
+    "test:explore": "tsx scripts/test-explore.ts",
+    "test:packing": "tsx scripts/test-packing.ts",
+    "test:memories": "tsx scripts/test-memories.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "0.12.7",
-    "@supabase/supabase-js": "2.117.2",
+    "@neon/config": "^1.8.3",
+    "@neon/env": "^1.5.0",
+    "@neondatabase/auth": "0.5.0-beta",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
     "date-fns": "4.4.0",
+    "drizzle-orm": "0.45.3",
     "lucide-react": "1.52.0",
     "next": "16.3.8",
+    "pg": "8.23.1",
     "radix-ui": "1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -29,11 +43,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "20.19.43",
+    "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "drizzle-kit": "0.31.11",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
     "typescript": "5.9.3"
   }
 }

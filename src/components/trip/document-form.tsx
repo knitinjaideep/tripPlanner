@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { saveDocument } from "@/app/actions/documents";
-import type { ActionState, Booking, DocumentLink } from "@/lib/types";
+import type { ActionState, Reservation, TripDocument } from "@/lib/types";
 import {
   FieldShell,
   FormMessage,
@@ -17,16 +17,16 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   tripId: string;
-  doc?: DocumentLink;
+  doc?: TripDocument;
   bookingId?: string | null;
-  bookings: Booking[];
+  bookings: Reservation[];
   onCancel: () => void;
   onSaved: () => void;
 };
 
 export function DocumentForm({ tripId, doc, bookingId, bookings, onCancel, onSaved }: Props) {
   const { state, onSubmit, pending } = useFormAction(async (prev: ActionState, formData: FormData) => {
-    const result = await saveDocument(doc?.id ?? null, prev, formData);
+    const result = await saveDocument(tripId, doc?.id ?? null, prev, formData);
     if (result.ok) {
       toast.success(result.message);
       onSaved();
@@ -37,8 +37,7 @@ export function DocumentForm({ tripId, doc, bookingId, bookings, onCancel, onSav
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-5">
-      <input type="hidden" name="trip_id" value={tripId} />
-      <FormMessage message={state.ok ? undefined : state.message} />
+      <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
       <TextField
         idPrefix="doc"
         name="label"
@@ -62,12 +61,12 @@ export function DocumentForm({ tripId, doc, bookingId, bookings, onCancel, onSav
         required
         hint="Paste a Google Drive share link, or any https:// link."
       />
-      <FieldShell id="doc-booking_id" label="Attach to" error={errors.booking_id}>
+      <FieldShell id="doc-reservation_id" label="Attach to" error={errors.reservation_id}>
         <div className="relative">
           <select
-            id="doc-booking_id"
-            name="booking_id"
-            defaultValue={doc?.booking_id ?? bookingId ?? ""}
+            id="doc-reservation_id"
+            name="reservation_id"
+            defaultValue={doc?.reservation_id ?? bookingId ?? ""}
             className={cn(controlClass, "w-full appearance-none border pr-10")}
           >
             <option value="">Whole trip</option>

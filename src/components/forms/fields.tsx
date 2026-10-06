@@ -1,9 +1,10 @@
 import type { ComponentProps, ReactNode } from "react";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ChevronDown, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { timeZoneLabel, timeZoneOptions } from "@/lib/time-zones";
 
 export const controlClass =
   "h-11 rounded-[10px] border-input bg-white px-3.5 text-[0.9375rem] text-ink shadow-none placeholder:text-[#8a979f] focus-visible:border-teal focus-visible:ring-3 focus-visible:ring-teal/25 aria-invalid:border-destructive aria-invalid:ring-destructive/15 md:text-[0.9375rem]";
@@ -116,12 +117,25 @@ export function TextAreaField({
   );
 }
 
-export function FormMessage({ message }: { message?: string }) {
+export function FormMessage({ message, signedOut }: { message?: string; signedOut?: boolean }) {
   if (!message) return null;
   return (
     <div role="alert" className="flex gap-2.5 rounded-xl border border-[#f3c6bf] bg-[#fff1ee] p-3.5 text-sm text-[#8c2b1f]">
       <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      <p>{message}</p>
+      <p>
+        {message}
+        {signedOut ? (
+          <>
+            {" "}
+            {/* New tab, so this form and what was typed stay put. */}
+            <a href="/login" target="_blank" rel="noopener" className="font-semibold underline underline-offset-2">
+              Sign in again
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            , then save.
+          </>
+        ) : null}
+      </p>
     </div>
   );
 }
@@ -155,3 +169,95 @@ export function SubmitButton({
 
 export const secondaryButtonClass =
   "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-input bg-white px-5 text-[0.9375rem] font-semibold text-ink transition-colors hover:bg-secondary disabled:opacity-60";
+
+type TimeZoneFieldProps = {
+  name: string;
+  label: string;
+  defaultValue: string;
+  error?: string[];
+  hint?: string;
+  idPrefix?: string;
+  className?: string;
+};
+
+/** Native select of IANA zones (keyboard- and mobile-friendly). */
+export function TimeZoneField({ name, label, defaultValue, error, hint, idPrefix = "f", className }: TimeZoneFieldProps) {
+  const id = `${idPrefix}-${name}`;
+  const zones = timeZoneOptions();
+  const options = defaultValue && !zones.includes(defaultValue) ? [defaultValue, ...zones] : zones;
+  return (
+    <FieldShell id={id} label={label} error={error} hint={hint} className={className}>
+      <div className="relative">
+        <select
+          id={id}
+          name={name}
+          defaultValue={defaultValue}
+          aria-invalid={error?.length ? true : undefined}
+          aria-describedby={describedBy(id, error, hint)}
+          className={cn(controlClass, "w-full appearance-none border pr-10")}
+        >
+          {options.map((tz) => (
+            <option key={tz} value={tz}>
+              {timeZoneLabel(tz)}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </div>
+    </FieldShell>
+  );
+}
+
+type SelectFieldProps = Omit<ComponentProps<"select">, "id" | "children"> & {
+  name: string;
+  label: string;
+  options: { value: string; label: string; disabled?: boolean }[];
+  error?: string[];
+  hint?: string;
+  optional?: boolean;
+  idPrefix?: string;
+  wrapperClassName?: string;
+};
+
+/** Native select styled like the other controls (keyboard- and mobile-friendly). */
+export function SelectField({
+  name,
+  label,
+  options,
+  error,
+  hint,
+  optional,
+  idPrefix = "f",
+  wrapperClassName,
+  className,
+  ...props
+}: SelectFieldProps) {
+  const id = `${idPrefix}-${name}`;
+  return (
+    <FieldShell id={id} label={label} error={error} hint={hint} optional={optional} className={wrapperClassName}>
+      <div className="relative">
+        <select
+          id={id}
+          name={name}
+          aria-invalid={error?.length ? true : undefined}
+          aria-describedby={describedBy(id, error, hint)}
+          className={cn(controlClass, "w-full appearance-none border pr-10", className)}
+          {...props}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value} disabled={o.disabled}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </div>
+    </FieldShell>
+  );
+}

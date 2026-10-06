@@ -1,6 +1,8 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { AuthRequiredError } from "@/lib/dal";
+import { SessionUnavailableError } from "@/lib/user";
 import type { ActionState } from "@/lib/types";
 
 export function invalid(error: z.ZodError): ActionState {
@@ -11,21 +13,28 @@ export function invalid(error: z.ZodError): ActionState {
   };
 }
 
-export function failed(context: string, error: { message: string; code?: string }): ActionState {
-  // Log details server-side only; show the user a calm, generic message.
-  console.error(`[rove] ${context}:`, error.code, error.message);
-  return { ok: false, message: "Something went wrong saving that. Please try again." };
-}
-
-/** A Supabase client for a verified user, or null when signed out. */
-export async function authedClient() {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims?.sub) return null;
-  return supabase;
-}
-
 export const SIGNED_OUT: ActionState = {
   ok: false,
-  message: "Your session has ended. Please sign in again.",
+  signedOut: true,
+  message: "Your session has ended. Sign in again to save — your changes are still here.",
 };
+
+export const notFound = (what: string): ActionState => ({ ok: false, message: `${what} not found.` });
+
+/**
+ * Run a mutation and turn failures into a calm ActionState. Redirects and
+ * other Next.js control flow are re-thrown. Details are logged server-side
+ * only (no SQL, credentials or tokens reach the browser).
+ */
+export async function guarded(context: string, run: () => Promise<ActionState>): Promise<ActionState> {
+  try {
+    return await run();
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof AuthRequiredError) return SIGNED_OUT;
+    if (error instanceof SessionUnavailableError) return { ok: false, message: error.message };
+    const pg = error as { code?: string; cause?: { code?: string } };
+    console.error(`[rove] ${context} failed:`, pg.cause?.code ?? pg.code ?? (error as Error)?.name);
+    return { ok: false, message: "Something went wrong saving that. Nothing was changed — please try again." };
+  }
+}

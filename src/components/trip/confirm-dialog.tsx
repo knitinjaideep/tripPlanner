@@ -19,10 +19,21 @@ type Props = {
   description: string;
   confirmLabel: string;
   onConfirm: () => Promise<void>;
+  pendingLabel?: string;
+  cancelLabel?: string;
 };
 
 /** Destructive confirmation that stays open (with a spinner) until done. */
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, onConfirm }: Props) {
+export function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel,
+  onConfirm,
+  pendingLabel = "Deleting…",
+  cancelLabel = "Keep it",
+}: Props) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -41,7 +52,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
             disabled={pending}
             onClick={() => onOpenChange(false)}
           >
-            Keep it
+            {cancelLabel}
           </button>
           <button
             type="button"
@@ -51,7 +62,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
             className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-destructive px-5 text-[0.9375rem] font-semibold text-white hover:bg-[#9a1d14] disabled:opacity-70"
           >
             {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-            {pending ? "Deleting…" : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </button>
         </AlertDialogFooter>
       </AlertDialogContent>

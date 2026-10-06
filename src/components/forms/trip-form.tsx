@@ -10,23 +10,26 @@ import {
   SubmitButton,
   TextAreaField,
   TextField,
+  TimeZoneField,
   secondaryButtonClass,
 } from "@/components/forms/fields";
 import { useFormAction } from "@/components/forms/use-form-action";
 
 type Props = {
   trip?: Trip;
+  /** Pre-selected zone for a new trip (the viewer's own). */
+  defaultTimeZone: string;
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   cancelHref: string;
 };
 
-export function TripForm({ trip, action, cancelHref }: Props) {
+export function TripForm({ trip, defaultTimeZone, action, cancelHref }: Props) {
   const { state, onSubmit, pending } = useFormAction(action);
   const errors = state.fieldErrors ?? {};
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-8">
-      <FormMessage message={state.ok ? undefined : state.message} />
+      <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
 
       <fieldset className="space-y-5">
         <legend className="font-display mb-4 text-xl font-semibold text-ink">The basics</legend>
@@ -68,6 +71,13 @@ export function TripForm({ trip, action, cancelHref }: Props) {
             required
           />
         </div>
+        <TimeZoneField
+          name="time_zone"
+          label="Destination time zone"
+          defaultValue={trip?.time_zone ?? defaultTimeZone}
+          error={errors.time_zone}
+          hint="New bookings start in this zone; each booking can have its own."
+        />
         <TextField
           name="travelers"
           label="Who’s going"

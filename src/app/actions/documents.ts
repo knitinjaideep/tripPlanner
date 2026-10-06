@@ -1,62 +1,46 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { documentSchema, formFields, idSchema } from "@/lib/validation";
+import { createDocumentForUser, deleteDocumentForUser, updateDocumentForUser } from "@/lib/dal";
+import { documentSchema, formFields } from "@/lib/validation";
 import type { ActionState } from "@/lib/types";
-import { authedClient, failed, invalid, SIGNED_OUT } from "./shared";
+import { guarded, invalid, notFound } from "./shared";
 
-const DOCUMENT_FIELDS = ["trip_id", "booking_id", "label", "url"] as const;
+const DOCUMENT_FIELDS = ["reservation_id", "label", "url"] as const;
 
-/** Create (no documentId) or update a document link. */
+/** Create (no documentId) or update a document link on a trip. */
 export async function saveDocument(
+  tripId: string,
   documentId: string | null,
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const parsed = documentSchema.safeParse(formFields(formData, DOCUMENT_FIELDS));
   if (!parsed.success) return invalid(parsed.error);
-  if (documentId && !idSchema.safeParse(documentId).success) {
-    return { ok: false, message: "Document not found." };
-  }
 
-  const supabase = await authedClient();
-  if (!supabase) return SIGNED_OUT;
+  const result = await guarded(documentId ? "updateDocument" : "createDocument", async () => {
+    const outcome = documentId
+      ? await updateDocumentForUser(tripId, documentId, parsed.data)
+      : await createDocumentForUser(tripId, parsed.data);
+    if (outcome.ok) return { ok: true, message: documentId ? "Link updated." : "Link saved." };
+    if (outcome.reason === "reservation_not_in_trip") {
+      return {
+        ok: false,
+        message: "Please check the highlighted fields.",
+        fieldErrors: { reservation_id: ["Choose a booking from this trip."] },
+      };
+    }
+    return notFound(documentId ? "Document" : "Trip");
+  });
 
-  const { trip_id: tripId, ...fields } = parsed.data;
-
-  if (documentId) {
-    const { data, error } = await supabase
-      .from("document_links")
-      .update(fields)
-      .eq("id", documentId)
-      .eq("trip_id", tripId)
-      .select("id")
-      .maybeSingle();
-    if (error) return failed("updateDocument", error);
-    if (!data) return { ok: false, message: "Document not found." };
-  } else {
-    const { error } = await supabase.from("document_links").insert({ trip_id: tripId, ...fields });
-    if (error) return failed("createDocument", error);
-  }
-
-  revalidatePath(`/trips/${tripId}`, "layout");
-  return { ok: true, message: documentId ? "Link updated." : "Link saved." };
+  if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
+  return result;
 }
 
 export async function deleteDocument(tripId: string, documentId: string): Promise<ActionState> {
-  if (!idSchema.safeParse(tripId).success || !idSchema.safeParse(documentId).success) {
-    return { ok: false, message: "Document not found." };
-  }
-  const supabase = await authedClient();
-  if (!supabase) return SIGNED_OUT;
-
-  const { error } = await supabase
-    .from("document_links")
-    .delete()
-    .eq("id", documentId)
-    .eq("trip_id", tripId);
-  if (error) return failed("deleteDocument", error);
-
-  revalidatePath(`/trips/${tripId}`, "layout");
-  return { ok: true, message: "Link removed." };
+  const result = await guarded("deleteDocument", async () =>
+    (await deleteDocumentForUser(tripId, documentId)) ? { ok: true, message: "Link removed." } : notFound("Document"),
+  );
+  if (result.ok) revalidatePath(`/trips/${tripId}`, "layout");
+  return result;
 }

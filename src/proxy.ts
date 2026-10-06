@@ -1,8 +1,50 @@
-import type { NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/proxy";
+import { NextResponse, type NextRequest } from "next/server";
+import { getAuth, NEON_AUTH_COOKIE_PREFIX, SESSION_VERIFIER_PARAM } from "@/lib/auth/server";
+import { DEFAULT_AFTER_LOGIN, LOGIN_PATH, safeNextPath } from "@/lib/auth/redirects";
 
+let authMiddleware: ((request: NextRequest) => Promise<NextResponse>) | null = null;
+
+/**
+ * Runs Neon Auth's middleware on every app route. It:
+ * - completes Google sign-in: on return, the callback URL carries
+ *   `neon_auth_session_verifier`, which it exchanges for session cookies;
+ * - refreshes the session-data cookie;
+ * - optimistically redirects signed-out visitors to /login.
+ *
+ * This is only a first gate. Pages and Server Actions verify the session
+ * again through the data access layer (src/lib/dal.ts).
+ */
 export async function proxy(request: NextRequest) {
-  return updateSession(request);
+  const auth = getAuth();
+  // Without configuration, pages render setup instructions instead.
+  if (!auth) return NextResponse.next();
+
+  authMiddleware ??= auth.middleware({ loginUrl: LOGIN_PATH });
+  const response = await authMiddleware(request);
+
+  // Rewrite the SDK's login redirect to carry a safe return path and reason.
+  const location = response.headers.get("location");
+  if (!location || request.nextUrl.pathname === LOGIN_PATH) return response;
+  const target = new URL(location, request.url);
+  if (target.origin !== request.nextUrl.origin || target.pathname !== LOGIN_PATH) return response;
+
+  const login = new URL(LOGIN_PATH, request.url);
+  const { pathname, search, searchParams } = request.nextUrl;
+  if (searchParams.has(SESSION_VERIFIER_PARAM)) {
+    // Came back from Google but the verifier could not be exchanged.
+    login.searchParams.set("error", "callback");
+  } else {
+    const next = safeNextPath(`${pathname}${search}`);
+    if (next !== DEFAULT_AFTER_LOGIN) login.searchParams.set("next", next);
+    const hadSession = request.cookies
+      .getAll()
+      .some((c) => c.name.startsWith(NEON_AUTH_COOKIE_PREFIX) && c.name.endsWith(".session_token"));
+    if (hadSession) login.searchParams.set("reason", "expired");
+  }
+
+  const redirect = NextResponse.redirect(login);
+  for (const cookie of response.headers.getSetCookie()) redirect.headers.append("set-cookie", cookie);
+  return redirect;
 }
 
 export const config = {

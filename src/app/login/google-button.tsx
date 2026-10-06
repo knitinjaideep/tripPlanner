@@ -3,9 +3,14 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { GoogleIcon } from "@/components/brand";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 
-export function GoogleSignInButton({ disabled = false }: { disabled?: boolean }) {
+/**
+ * Starts Google sign-in through Neon Auth. Neon Auth sends the browser to
+ * Google (basic `openid email profile` identity only — no Drive or Gmail),
+ * then back to `callbackURL`, where the proxy completes the session.
+ */
+export function GoogleSignInButton({ next }: { next: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -13,13 +18,15 @@ export function GoogleSignInButton({ disabled = false }: { disabled?: boolean })
     setPending(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
+      const origin = window.location.origin;
+      const errorUrl = new URL("/login", origin);
+      errorUrl.searchParams.set("error", "provider");
+      if (next !== "/trips") errorUrl.searchParams.set("next", next);
+
+      const { error } = await authClient.signIn.social({
         provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/trips`,
-          queryParams: { prompt: "select_account" },
-        },
+        callbackURL: new URL(next, origin).toString(),
+        errorCallbackURL: errorUrl.toString(),
       });
       if (error) throw error;
       // The browser is now navigating to Google; keep the spinner up.
@@ -34,7 +41,7 @@ export function GoogleSignInButton({ disabled = false }: { disabled?: boolean })
       <button
         type="button"
         onClick={signIn}
-        disabled={disabled || pending}
+        disabled={pending}
         aria-busy={pending}
         className="focus-ring flex h-13 w-full items-center justify-center gap-3 rounded-xl border border-input bg-white px-5 text-[0.9375rem] font-semibold text-ink shadow-[0_1px_2px_rgba(16,47,64,0.06)] transition-colors hover:bg-[#f7fafa] disabled:cursor-not-allowed disabled:opacity-60"
       >

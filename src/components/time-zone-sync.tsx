@@ -19,7 +19,9 @@ export function TimeZoneSync() {
       .find((c) => c.startsWith(`${COOKIE}=`))
       ?.split("=")[1];
     if (tz && decodeURIComponent(current ?? "") !== tz) {
-      document.cookie = `${COOKIE}=${encodeURIComponent(tz)}; path=/; max-age=31536000; samesite=lax`;
+      // Host-only (no Domain), Secure on https; plain http stays usable for local dev.
+      const secure = window.location.protocol === "https:" ? "; secure" : "";
+      document.cookie = `${COOKIE}=${encodeURIComponent(tz)}; path=/; max-age=31536000; samesite=lax${secure}`;
       router.refresh();
     }
   }, [router]);

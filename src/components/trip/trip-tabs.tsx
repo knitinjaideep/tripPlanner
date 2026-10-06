@@ -12,12 +12,11 @@ export function TripTabs({ tripId }: { tripId: string }) {
   const base = `/trips/${tripId}`;
   const tabs: Tab[] = [
     { label: "Overview", icon: Home, href: base },
+    { label: "Itinerary", icon: CalendarDays, href: `${base}/itinerary` },
     { label: "Bookings", icon: Ticket, href: `${base}/bookings` },
-    // Later stages — visible so the shape of the product is clear, but inert.
-    { label: "Itinerary", icon: CalendarDays },
-    { label: "Explore", icon: Compass },
-    { label: "Packing", icon: Luggage },
-    { label: "Memories", icon: Images },
+    { label: "Explore", icon: Compass, href: `${base}/explore` },
+    { label: "Packing", icon: Luggage, href: `${base}/packing` },
+    { label: "Memories", icon: Images, href: `${base}/memories` },
   ];
 
   return (
