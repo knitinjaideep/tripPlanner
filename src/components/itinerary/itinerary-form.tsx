@@ -13,7 +13,9 @@ import {
   TimeZoneField,
   secondaryButtonClass,
 } from "@/components/forms/fields";
+import { ConflictGuard } from "@/components/forms/conflict";
 import { useFormAction } from "@/components/forms/use-form-action";
+import { Attribution } from "@/components/trip/trip-access";
 import { useTripWorkspace } from "@/components/trip/trip-workspace";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, placeSummary } from "@/lib/booking-format";
@@ -83,7 +85,8 @@ export function ItineraryForm(props: Props) {
   return (
     <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-6 sm:px-6">
-        <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
+        <FormMessage message={state.ok || state.conflict ? undefined : state.message} signedOut={state.signedOut} />
+        <ConflictGuard state={state} expectedUpdatedAt={item?.updated_at} onDiscard={onCancel} />
         {editing ? null : <input type="hidden" name="request_id" value={requestId} />}
 
         {editing ? null : (
@@ -114,7 +117,8 @@ export function ItineraryForm(props: Props) {
         {mode === "booking" ? <BookingFields {...props} errors={errors} /> : null}
       </div>
 
-      <div className="flex flex-col-reverse gap-3 border-t border-border bg-surface px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+      <div className="flex flex-col-reverse gap-3 border-t border-border bg-surface px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
+        {editing ? <Attribution createdBy={item?.created_by} updatedBy={item?.updated_by} className="text-xs text-muted-foreground sm:mr-auto" /> : null}
         <button type="button" onClick={onCancel} className={secondaryButtonClass}>
           Cancel
         </button>
@@ -257,7 +261,7 @@ function PlaceFields({ item, places, errors, ...props }: FieldProps) {
               href={placeMapsUrl(place)}
               target="_blank"
               rel="noopener noreferrer"
-              className="focus-ring mt-1 inline-flex min-h-9 items-center gap-1.5 rounded text-sm font-semibold text-moss-ink hover:underline"
+              className="focus-ring mt-1 inline-flex min-h-11 items-center gap-1.5 rounded text-sm font-semibold text-moss-ink hover:underline"
             >
               Open in Maps <ExternalLink className="size-3.5" aria-hidden="true" />
               <span className="sr-only">(opens in a new tab)</span>
@@ -374,7 +378,7 @@ function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, 
                 <button
                   type="button"
                   onClick={() => openBooking(b.id)}
-                  className="focus-ring inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 font-semibold text-moss-ink hover:bg-white"
+                  className="focus-ring inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 font-semibold text-moss-ink hover:bg-white"
                 >
                   Add a date
                 </button>

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuth, NEON_AUTH_COOKIE_PREFIX, SESSION_VERIFIER_PARAM } from "@/lib/auth/server";
 import { DEFAULT_AFTER_LOGIN, LOGIN_PATH, safeNextPath } from "@/lib/auth/redirects";
+import { INVITE_COOKIE, TOKEN_PATTERN } from "@/lib/sharing";
 
 let authMiddleware: ((request: NextRequest) => Promise<NextResponse>) | null = null;
 
@@ -33,6 +34,20 @@ export async function proxy(request: NextRequest) {
   if (searchParams.has(SESSION_VERIFIER_PARAM)) {
     // Came back from Google but the verifier could not be exchanged.
     login.searchParams.set("error", "callback");
+  } else if (pathname.startsWith("/invite/") && TOKEN_PATTERN.test(pathname.slice("/invite/".length))) {
+    // Signed out on an invitation link: keep the token in a short-lived first-party cookie and
+    // send only "/invite" through sign-in, so the token never travels to the auth provider.
+    login.searchParams.set("next", "/invite");
+    const redirect = NextResponse.redirect(login);
+    for (const cookie of response.headers.getSetCookie()) redirect.headers.append("set-cookie", cookie);
+    redirect.cookies.set(INVITE_COOKIE, pathname.slice("/invite/".length), {
+      path: "/",
+      maxAge: 30 * 60,
+      secure: true,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+    return redirect;
   } else {
     const next = safeNextPath(`${pathname}${search}`);
     if (next !== DEFAULT_AFTER_LOGIN) login.searchParams.set("next", next);

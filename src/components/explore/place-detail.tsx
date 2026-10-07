@@ -57,6 +57,7 @@ import {
   type Recommendation,
 } from "@/lib/recommendations";
 import type { ActionState, ItineraryEntry, PlaceWithVisits, Reservation } from "@/lib/types";
+import { Attribution, useTripAccess } from "@/components/trip/trip-access";
 import { cn } from "@/lib/utils";
 import { useExplore } from "./explore-workspace";
 import { FavoriteButton } from "./favorite-button";
@@ -117,6 +118,7 @@ type ScheduleSeed = { start: string; end: string } | null;
 
 function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, items, reservations }: Props) {
   const { tripId, editPlace, removePlace } = useExplore();
+  const { canEdit } = useTripAccess();
   const [action, setAction] = useState<DetailAction>(initialAction);
   const [seed, setSeed] = useState<ScheduleSeed>(null);
   const rec = recommendationOf(place);
@@ -185,6 +187,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
             ) : null}
             <FavoriteButton tripId={tripId} placeId={place.id} placeName={place.name} favorite={place.is_favorite} variant="label" />
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">Your favorite and your notes are private — only you see them.</p>
           {!link.exact ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {rec ? DRIVE_DISCLAIMER : "No exact map link saved"} — Maps searches for “{link.query}”.
@@ -199,6 +202,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
           </dl>
         ) : null}
 
+        {canEdit ? (
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -223,8 +227,9 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
             <CircleCheckBig className="size-4" aria-hidden="true" /> Mark visited
           </button>
         </div>
+        ) : null}
 
-        {action === "schedule" ? (
+        {canEdit && action === "schedule" ? (
           <ScheduleForm
             key={seed ? `${seed.start}-${seed.end}` : "blank"}
             tripId={tripId}
@@ -239,7 +244,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
             onDone={() => setAction(null)}
           />
         ) : null}
-        {action === "record" ? (
+        {canEdit && action === "record" ? (
           <RecordForm tripId={tripId} place={place} planned={planned} days={days} defaultDate={defaultDate} onDone={() => setAction(null)} />
         ) : null}
 
@@ -247,7 +252,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
         {rec && (rec.price || rec.priceNote) ? <PriceCard rec={rec} /> : null}
         {rec ? <RecommendationNotes rec={rec} /> : null}
 
-        <NotesForm key={place.planning_notes ?? ""} tripId={tripId} place={place} />
+        <NotesForm key={place.my_notes ?? ""} tripId={tripId} place={place} />
 
         <section aria-labelledby="planned-heading">
           <h3 id="planned-heading" className="eyebrow text-ink">
@@ -267,7 +272,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
                     {v.local_date ? (
                       <Link
                         href={itineraryHref(tripId, v.local_date)}
-                        className="focus-ring inline-flex min-h-10 shrink-0 items-center rounded-lg px-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
+                        className="focus-ring inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
                       >
                         Open day
                       </Link>
@@ -322,8 +327,10 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
         </section>
 
         {rec ? <Sources rec={rec} /> : null}
+        <Attribution createdBy={place.created_by} updatedBy={place.updated_by} />
       </div>
 
+      {canEdit ? (
       <div className="flex gap-3 border-t border-border bg-surface px-5 py-4 sm:px-6">
         <button
           type="button"
@@ -336,6 +343,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
           <Pencil className="size-4" aria-hidden="true" /> Edit
         </button>
       </div>
+      ) : null}
     </div>
   );
 }
@@ -428,7 +436,7 @@ function TakeTurnsCard({ turns, onUse }: { turns: NonNullable<Recommendation["tu
         <button
           type="button"
           onClick={onUse}
-          className="focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-moss-ink bg-white px-3.5 text-sm font-semibold text-moss-ink hover:bg-moss-soft"
+          className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-moss-ink bg-white px-3.5 text-sm font-semibold text-moss-ink hover:bg-moss-soft"
         >
           <CalendarPlus className="size-4" aria-hidden="true" /> Plan a turn at these times
         </button>
@@ -476,7 +484,7 @@ function Sources({ rec }: { rec: Recommendation }) {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-lg text-sm font-semibold break-all text-moss-ink underline-offset-2 hover:underline"
+              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold break-all text-moss-ink underline-offset-2 hover:underline"
             >
               {hostOf(url)}
               <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
@@ -496,9 +504,9 @@ function Sources({ rec }: { rec: Recommendation }) {
 
 /* ------------------------------- forms ------------------------------- */
 
-/** "Your notes" — the traveler's own planning notes for the place. */
+/** "Your notes" — private to the signed-in member (never the trip's shared notes). */
 function NotesForm({ tripId, place }: { tripId: string; place: PlaceWithVisits }) {
-  const saved = place.planning_notes ?? "";
+  const saved = place.my_notes ?? "";
   const [value, setValue] = useState(saved);
   const { state, onSubmit, pending } = useFormAction(async (prev: ActionState, formData: FormData) => {
     const result = await savePlaceNotes(tripId, place.id, prev, formData);
@@ -512,7 +520,8 @@ function NotesForm({ tripId, place }: { tripId: string; place: PlaceWithVisits }
       <TextAreaField
         idPrefix={`notes-${place.id}`}
         name="planning_notes"
-        label="Your notes"
+        label="Your notes (private)"
+        hint="Only you can see these."
         maxLength={5000}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -522,7 +531,7 @@ function NotesForm({ tripId, place }: { tripId: string; place: PlaceWithVisits }
       />
       <div className="flex items-center justify-end gap-3">
         {!dirty && saved ? <span className="text-xs text-muted-foreground">Saved</span> : null}
-        <SubmitButton pending={pending} pendingLabel="Saving…" disabled={!dirty} className="min-h-10 px-4 text-sm">
+        <SubmitButton pending={pending} pendingLabel="Saving…" disabled={!dirty} className="min-h-11 px-4 text-sm">
           Save notes
         </SubmitButton>
       </div>
@@ -708,10 +717,10 @@ function ScheduleForm({
         className="min-h-24"
       />
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-10 px-4 text-sm")}>
+        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-11 px-4 text-sm")}>
           Cancel
         </button>
-        <SubmitButton pending={pending} pendingLabel="Adding…" disabled={needsKeep && !keep} className="min-h-10 px-4 text-sm">
+        <SubmitButton pending={pending} pendingLabel="Adding…" disabled={needsKeep && !keep} className="min-h-11 px-4 text-sm">
           Add to itinerary
         </SubmitButton>
       </div>
@@ -807,10 +816,10 @@ function RecordForm({
         A trip favorite
       </label>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-10 px-4 text-sm")}>
+        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-11 px-4 text-sm")}>
           Cancel
         </button>
-        <SubmitButton pending={pending} pendingLabel="Saving…" className="min-h-10 px-4 text-sm">
+        <SubmitButton pending={pending} pendingLabel="Saving…" className="min-h-11 px-4 text-sm">
           {needsChoice && choice === "" ? "Choose above" : "Save visit"}
         </SubmitButton>
       </div>

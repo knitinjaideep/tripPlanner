@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, MapPin } from "lucide-react";
+import { CalendarDays, MapPin, Users } from "lucide-react";
 import { TravelerStack } from "@/components/user-avatar";
 import { getCover } from "@/lib/covers";
 import { daysUntil, formatDateRange, type TripPhase } from "@/lib/dates";
-import type { Trip } from "@/lib/types";
+import type { TripListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function countdownLabel(trip: Trip, phase: TripPhase, today: string) {
+export function countdownLabel(trip: Pick<TripListItem, "start_date">, phase: TripPhase, today: string) {
   if (phase === "current") return "Happening now";
   if (phase === "past") return null;
   const days = daysUntil(trip.start_date, today);
@@ -21,7 +21,7 @@ export function TripCard({
   today,
   priority = false,
 }: {
-  trip: Trip;
+  trip: TripListItem;
   phase: TripPhase;
   today: string;
   priority?: boolean;
@@ -72,6 +72,19 @@ export function TripCard({
           <CalendarDays className="size-4 shrink-0" aria-hidden="true" />
           {formatDateRange(trip.start_date, trip.end_date)}
         </p>
+        {trip.role !== "owner" ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-moss-ink">
+            <Users className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0">
+              Shared with you
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                · {trip.role === "editor" ? "Editor" : "Viewer"}
+                {trip.owner_name ? ` · from ${trip.owner_name}` : ""}
+              </span>
+            </span>
+          </p>
+        ) : null}
         {trip.travelers.length > 0 ? (
           <div className="flex items-center gap-3 border-t border-border pt-3">
             <TravelerStack travelers={trip.travelers} />

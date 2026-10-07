@@ -1,5 +1,6 @@
 "use client";
 
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { CalendarDays, Compass, Heart, Loader2, Pencil, PenLine, Ticket } from "lucide-react";
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { EditDialog, useDirty } from "./edit-dialog";
 
 const linkClass =
-  "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-moss-ink hover:bg-moss-soft/60";
+  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-moss-ink hover:bg-moss-soft/60";
 
 /**
  * One completed visit in the journal. Its rating, reflection and favorite
@@ -30,6 +31,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
   const title = entryTitle(visit);
   const schedule = itemSchedule(visit);
   const clock = schedule.date ? entryClock({ date: schedule.date, time: schedule.startTime, timeZone: schedule.timeZone }) : null;
+  const { canEdit } = useTripAccess();
   const [editing, setEditing] = useState(false);
   const [session, setSession] = useState(0);
   const [favorite, setOptimisticFavorite] = useOptimistic(visit.is_favorite);
@@ -80,6 +82,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
               </span>
             ) : null}
           </div>
+          {canEdit ? (
           <button
             type="button"
             onClick={toggleFavorite}
@@ -94,6 +97,9 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
           >
             <Heart className={cn("size-5", favorite && "fill-current")} aria-hidden="true" />
           </button>
+          ) : favorite ? (
+            <Heart className="mt-1 size-5 shrink-0 fill-current text-coral" aria-label="Favorite" />
+          ) : null}
         </div>
 
         {visit.rating ? <Stars value={visit.rating} className="mt-2" /> : null}
@@ -105,7 +111,7 @@ export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: It
         ) : null}
 
         <div className="mt-3 -ml-2 flex flex-wrap items-center gap-x-1 gap-y-0.5">
-          {visit.reflection || visit.rating ? (
+          {!canEdit ? null : visit.reflection || visit.rating ? (
             <button type="button" onClick={edit} className={linkClass}>
               <Pencil className="size-3.5" aria-hidden="true" /> Edit<span className="sr-only"> reflection for {title}</span>
             </button>

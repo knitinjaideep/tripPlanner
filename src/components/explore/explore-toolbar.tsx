@@ -69,7 +69,7 @@ export function ExploreToolbar({
               scroll={false}
               aria-current={filters.kind === k ? "page" : undefined}
               className={cn(
-                "focus-ring flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold whitespace-nowrap transition-colors lg:flex-none",
+                "focus-ring flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold whitespace-nowrap transition-colors lg:flex-none",
                 filters.kind === k ? "bg-white text-ink shadow-sm" : "text-muted-foreground hover:text-ink",
               )}
             >
@@ -136,7 +136,7 @@ export function ExploreToolbar({
                 aria-pressed={on}
                 onClick={() => go({ flags: toggleFlag(filters.flags, f) })}
                 className={cn(
-                  "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors",
+                  "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors",
                   on
                     ? "border-moss bg-moss-soft text-moss-ink"
                     : "border-border bg-surface text-muted-foreground hover:border-moss/60 hover:text-ink",

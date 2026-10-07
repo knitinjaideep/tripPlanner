@@ -14,6 +14,7 @@ import { importMessage, type ImportSummary } from "@/lib/collections/collection"
 import {
   collectionIdSchema,
   deletePlaceSchema,
+  expectedUpdatedAtSchema,
   idSchema,
   placeFavoriteSchema,
   placeNotesSchema,
@@ -23,7 +24,7 @@ import {
   requestIdSchema,
 } from "@/lib/validation";
 import type { ActionState } from "@/lib/types";
-import { guarded, invalid, notFound } from "./shared";
+import { conflictState, guarded, invalid, notFound } from "./shared";
 
 const PLACE_FIELDS = [
   "name",
@@ -50,9 +51,14 @@ export async function savePlace(
   let id: string | undefined;
   const result = await guarded(placeId ? "updatePlace" : "createPlace", async () => {
     if (placeId) {
-      return (await updatePlaceForUser(tripId, placeId, parsed.data))
-        ? { ok: true, message: "Place updated." }
-        : notFound("Place");
+      const updated = await updatePlaceForUser(
+        tripId,
+        placeId,
+        parsed.data,
+        expectedUpdatedAtSchema.parse(formData.get("expected_updated_at") ?? undefined),
+      );
+      if (updated === "conflict") return conflictState(tripId, "place", placeId, "place");
+      return updated ? { ok: true, message: "Place updated." } : notFound("Place");
     }
     const created = await createPlaceForUser(tripId, parsed.data, requestId.success ? requestId.data : undefined);
     if (created.ok) id = created.id;

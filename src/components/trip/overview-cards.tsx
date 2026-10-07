@@ -339,7 +339,7 @@ export function DayPlanCard({
           </Link>
         </div>
       ) : (
-        <ol className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2">
+        <ol className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 md:grid-cols-2">
           {shown.map((e) => {
             const clock = entryClock(e);
             const label = entryLabel(e);
@@ -513,7 +513,7 @@ export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
             {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true, b.start_time_zone)?.split(" · ")[1]}` : ""}
           </span>
           <span className="flex min-w-0 items-center gap-2">
-            <span className={cn("truncate font-semibold text-ink group-hover:text-moss-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>
+            <span className={cn("min-w-0 font-semibold break-words text-ink group-hover:text-moss-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>
               {b.title}
             </span>
             {b.status === "cancelled" ? (

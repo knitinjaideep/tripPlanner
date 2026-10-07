@@ -12,6 +12,7 @@ import {
   TextField,
   secondaryButtonClass,
 } from "@/components/forms/fields";
+import { ConflictGuard } from "@/components/forms/conflict";
 import { useFormAction } from "@/components/forms/use-form-action";
 import { similarPlaces } from "@/lib/explore";
 import { LABELS, PLACE_CATEGORIES, PLACE_KINDS, PLACE_PRIORITIES, type PlaceKind } from "@/lib/plan-options";
@@ -56,7 +57,8 @@ export function PlaceForm({
   return (
     <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-6 sm:px-6">
-        <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
+        <FormMessage message={state.ok || state.conflict ? undefined : state.message} signedOut={state.signedOut} />
+        <ConflictGuard state={state} expectedUpdatedAt={place?.updated_at} onDiscard={onCancel} />
         {place ? null : <input type="hidden" name="request_id" value={requestId} />}
 
         <div>
@@ -96,7 +98,7 @@ export function PlaceForm({
           </div>
         </fieldset>
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2">
           <SelectField
             key={kind}
             idPrefix={p}
@@ -165,7 +167,8 @@ export function PlaceForm({
         <TextAreaField
           idPrefix={p}
           name="planning_notes"
-          label="Planning notes"
+          label="Notes for the trip"
+          hint="Everyone on this trip can see these. Use “Your notes” in the place details for private ones."
           defaultValue={place?.planning_notes ?? ""}
           error={errors.planning_notes}
           optional

@@ -1,14 +1,14 @@
+import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getCover } from "@/lib/covers";
 import { formatDateRange } from "@/lib/dates";
 import type { Trip } from "@/lib/types";
-import { TripActions } from "./trip-actions";
 import { statusLabel } from "./trip-hero";
 
 /** Slim destination header for inner trip pages (the overview keeps the full hero). */
-export function TripHeaderCompact({ trip, today }: { trip: Trip; today: string }) {
+export function TripHeaderCompact({ trip, today, actions }: { trip: Trip; today: string; actions: ReactNode }) {
   const cover = getCover(trip.cover_image);
 
   return (
@@ -37,7 +37,7 @@ export function TripHeaderCompact({ trip, today }: { trip: Trip; today: string }
           </span>
           <span className="min-w-0">
             <span className="eyebrow block truncate text-muted-foreground">{trip.destination}</span>
-            <span className="font-display block truncate text-xl leading-tight font-semibold text-ink group-hover:text-moss-ink sm:text-2xl">
+            <span className="font-display line-clamp-2 block text-xl leading-tight font-semibold break-words text-ink group-hover:text-moss-ink sm:text-2xl">
               {trip.title}
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
@@ -47,7 +47,7 @@ export function TripHeaderCompact({ trip, today }: { trip: Trip; today: string }
             </span>
           </span>
         </Link>
-        <TripActions tripId={trip.id} title={trip.title} className="border border-border bg-white shadow-none" />
+        {actions}
       </div>
     </section>
   );

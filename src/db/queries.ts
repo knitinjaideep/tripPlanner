@@ -6,6 +6,7 @@ import {
   itineraryItems,
   packingCategories,
   packingItems,
+  placeMemberState,
   places,
   reservations,
   tripMemories,
@@ -210,7 +211,7 @@ export async function createReservation(
 
 export type ReservationUpdateResult =
   | { ok: true }
-  | { ok: false; reason: "not_found" | "linked_visit_needs_date" };
+  | { ok: false; reason: "not_found" | "linked_visit_needs_date" | "conflict" };
 
 /**
  * A reservation that backs an itinerary visit must keep a date (the visit
@@ -222,6 +223,7 @@ export async function updateReservation(
   tripId: string,
   reservationId: string,
   input: ReservationInput,
+  expectedUpdatedAt?: string,
 ): Promise<ReservationUpdateResult> {
   return db.transaction(async (tx) => {
     if (!input.start_date) {
@@ -240,10 +242,20 @@ export async function updateReservation(
           eq(reservations.id, reservationId),
           eq(reservations.trip_id, tripId),
           eq(reservations.owner_id, ownerId),
+          expectedUpdatedAt ? sql`${reservations.updated_at} = ${expectedUpdatedAt}::timestamptz` : undefined,
         ),
       )
       .returning({ id: reservations.id });
-    return rows.length === 1 ? { ok: true } : { ok: false, reason: "not_found" };
+    if (rows.length === 1) return { ok: true };
+    if (expectedUpdatedAt) {
+      // Distinguish "someone changed it while you were editing" from "it is gone".
+      const [still] = await tx
+        .select({ id: reservations.id })
+        .from(reservations)
+        .where(and(eq(reservations.id, reservationId), eq(reservations.trip_id, tripId), eq(reservations.owner_id, ownerId)));
+      if (still) return { ok: false, reason: "conflict" };
+    }
+    return { ok: false, reason: "not_found" };
   });
 }
 
@@ -368,13 +380,24 @@ export async function deleteDocument(db: Db, ownerId: OwnerId, tripId: string, d
 
 /* ----------------------------- places ----------------------------- */
 
-/** Explore list with derived visit state, or null when the trip isn't the owner's. */
-export async function listPlaces(db: Db, ownerId: OwnerId, tripId: string): Promise<PlaceWithVisits[] | null> {
+/**
+ * Explore list with derived visit state, or null when the trip isn't the owner's.
+ * `viewerId` is the signed-in member: the heart and "Your notes" are theirs
+ * alone (place_member_state), never the trip's shared columns.
+ */
+export async function listPlaces(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  viewerId: string = ownerId,
+): Promise<PlaceWithVisits[] | null> {
   const [trip, rows] = await Promise.all([
     ownedTrip(db, ownerId, tripId),
     db
       .select({
         ...getTableColumns(places),
+        is_favorite: sql<boolean>`coalesce((select s.is_favorite from place_member_state s where s.place_id = ${places.id} and s.user_id = ${viewerId}), false)`,
+        my_notes: sql<string | null>`(select s.notes from place_member_state s where s.place_id = ${places.id} and s.user_id = ${viewerId})`,
         visit_count: sql<number>`count(${itineraryItems.id})::int`,
         planned_count: sql<number>`(count(*) filter (where ${itineraryItems.status} = 'planned'))::int`,
         completed_count: sql<number>`(count(*) filter (where ${itineraryItems.status} = 'completed'))::int`,
@@ -429,33 +452,85 @@ export async function createPlace(
   }
 }
 
-export async function updatePlace(db: Db, ownerId: OwnerId, tripId: string, placeId: string, input: PlaceInput) {
+/**
+ * true = saved, false = not found, "conflict" = it changed since the editor
+ * opened it (`expectedUpdatedAt`), so nothing was overwritten.
+ */
+export async function updatePlace(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  placeId: string,
+  input: PlaceInput,
+  expectedUpdatedAt?: string,
+): Promise<boolean | "conflict"> {
   const rows = await db
     .update(places)
     .set(input)
-    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
+    .where(
+      and(
+        eq(places.id, placeId),
+        eq(places.trip_id, tripId),
+        eq(places.owner_id, ownerId),
+        expectedUpdatedAt ? sql`${places.updated_at} = ${expectedUpdatedAt}::timestamptz` : undefined,
+      ),
+    )
     .returning({ id: places.id });
-  return rows.length === 1;
+  if (rows.length === 1) return true;
+  if (expectedUpdatedAt && (await placeInTrip(db, ownerId, tripId, placeId))) return "conflict";
+  return false;
 }
 
-/** Only the traveler's own notes change. false = not found. */
-export async function updatePlaceNotes(db: Db, ownerId: OwnerId, tripId: string, placeId: string, notes: string | null) {
-  const rows = await db
-    .update(places)
-    .set({ planning_notes: notes })
-    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
-    .returning({ id: places.id });
-  return rows.length === 1;
+/** The place must be in this trip; false = not found. */
+async function placeInTrip(db: Executor, ownerId: OwnerId, tripId: string, placeId: string) {
+  const [row] = await db
+    .select({ id: places.id })
+    .from(places)
+    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)));
+  return Boolean(row);
 }
 
-/** Sets the given value (never inverts the stored one), so repeated clicks converge. */
-export async function setPlaceFavorite(db: Db, ownerId: OwnerId, tripId: string, placeId: string, favorite: boolean) {
-  const rows = await db
-    .update(places)
-    .set({ is_favorite: favorite })
-    .where(and(eq(places.id, placeId), eq(places.trip_id, tripId), eq(places.owner_id, ownerId)))
-    .returning({ id: places.id });
-  return rows.length === 1;
+/**
+ * "Your notes": private to `viewerId` (place_member_state) — never the
+ * trip's shared notes, never visible to other members. false = not found.
+ */
+export async function updatePlaceNotes(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  placeId: string,
+  notes: string | null,
+  viewerId: string = ownerId,
+) {
+  if (!(await placeInTrip(db, ownerId, tripId, placeId))) return false;
+  await db
+    .insert(placeMemberState)
+    .values({ place_id: placeId, trip_id: tripId, user_id: viewerId, notes })
+    .onConflictDoUpdate({
+      target: [placeMemberState.place_id, placeMemberState.user_id],
+      set: { notes, updated_at: sql`now()` },
+    });
+  return true;
+}
+
+/** The viewer's own heart. Sets the given value (never inverts), so repeated clicks converge. */
+export async function setPlaceFavorite(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  placeId: string,
+  favorite: boolean,
+  viewerId: string = ownerId,
+) {
+  if (!(await placeInTrip(db, ownerId, tripId, placeId))) return false;
+  await db
+    .insert(placeMemberState)
+    .values({ place_id: placeId, trip_id: tripId, user_id: viewerId, is_favorite: favorite })
+    .onConflictDoUpdate({
+      target: [placeMemberState.place_id, placeMemberState.user_id],
+      set: { is_favorite: favorite, updated_at: sql`now()` },
+    });
+  return true;
 }
 
 export type CollectionImportResult =
@@ -667,7 +742,8 @@ export type ItineraryWriteResult =
         | "reservation_already_linked"
         | "reservation_backed"
         | "outside_trip"
-        | "in_future";
+        | "in_future"
+        | "conflict";
     };
 
 export type ItineraryWriteOptions = {
@@ -871,7 +947,10 @@ export async function updateItineraryItem(
   tripId: string,
   itemId: string,
   rawInput: ItineraryItemInput,
-  options: Pick<ItineraryWriteOptions, "saveToExplore"> = {},
+  options: Pick<ItineraryWriteOptions, "saveToExplore"> & {
+    /** The `updated_at` the editor loaded; a newer change by someone else is a "conflict", not overwritten. */
+    expectedUpdatedAt?: string;
+  } = {},
 ): Promise<ItineraryWriteResult> {
   try {
     return await db.transaction(async (tx): Promise<ItineraryWriteResult> => {
@@ -880,13 +959,19 @@ export async function updateItineraryItem(
       const problem = await checkVisitLinks(tx, ownerId, tripId, rawInput, itemId);
       if (problem) return problem;
       const [current] = await tx
-        .select({ id: itineraryItems.id })
+        .select({
+          id: itineraryItems.id,
+          stale: options.expectedUpdatedAt
+            ? sql<boolean>`${itineraryItems.updated_at} <> ${options.expectedUpdatedAt}::timestamptz`
+            : sql<boolean>`false`,
+        })
         .from(itineraryItems)
         .where(
           and(eq(itineraryItems.id, itemId), eq(itineraryItems.trip_id, tripId), eq(itineraryItems.owner_id, ownerId)),
         )
         .for("update");
       if (!current) return { ok: false, reason: "not_found" };
+      if (current.stale) return { ok: false, reason: "conflict" };
       const { input, explorePlace } = options.saveToExplore
         ? await linkToExplore(tx, ownerId, tripId, rawInput)
         : { input: rawInput, explorePlace: undefined };
@@ -1632,7 +1717,7 @@ function sameIdSet(actual: string[], given: string[]) {
 
 export type PackingItemWriteResult =
   | { ok: true; id: string }
-  | { ok: false; reason: "not_found" | "category_not_in_trip" };
+  | { ok: false; reason: "not_found" | "category_not_in_trip" | "conflict" };
 
 async function categoryInTrip(tx: Tx, ownerId: OwnerId, tripId: string, categoryId: string) {
   const [row] = await tx
@@ -1706,12 +1791,23 @@ export async function updatePackingItem(
   tripId: string,
   itemId: string,
   input: PackingItemInput,
+  expectedUpdatedAt?: string,
 ): Promise<PackingItemWriteResult> {
   try {
     return await db.transaction(async (tx): Promise<PackingItemWriteResult> => {
       const where = and(eq(packingItems.id, itemId), eq(packingItems.trip_id, tripId), eq(packingItems.owner_id, ownerId));
-      const [current] = await tx.select({ category_id: packingItems.category_id }).from(packingItems).where(where).for("update");
+      const [current] = await tx
+        .select({
+          category_id: packingItems.category_id,
+          stale: expectedUpdatedAt
+            ? sql<boolean>`${packingItems.updated_at} <> ${expectedUpdatedAt}::timestamptz`
+            : sql<boolean>`false`,
+        })
+        .from(packingItems)
+        .where(where)
+        .for("update");
       if (!current) return { ok: false, reason: "not_found" };
+      if (current.stale) return { ok: false, reason: "conflict" };
       if (!(await categoryInTrip(tx, ownerId, tripId, input.category_id))) {
         return { ok: false, reason: "category_not_in_trip" };
       }

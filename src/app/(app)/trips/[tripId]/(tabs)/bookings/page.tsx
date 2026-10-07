@@ -31,7 +31,7 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
   const titles = new Map(trip.reservations.map((b) => [b.id, b.title]));
 
   return (
-    <div className="grid gap-10 lg:grid-cols-12 lg:gap-8">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-12 lg:gap-8">
       <section aria-labelledby="bookings-heading" className="lg:col-span-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

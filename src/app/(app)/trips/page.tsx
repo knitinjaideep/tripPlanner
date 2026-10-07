@@ -8,7 +8,7 @@ import { listTripsForUser } from "@/lib/dal";
 import { hourInTimeZone, todayInTimeZone, tripPhase } from "@/lib/dates";
 import { getViewerTimeZone } from "@/lib/timezone";
 import { requireUser } from "@/lib/dal";
-import type { Trip } from "@/lib/types";
+import type { TripListItem } from "@/lib/types";
 
 export const metadata: Metadata = { title: "My trips" };
 
@@ -28,7 +28,7 @@ function TripGroup({
 }: {
   title: string;
   description: string;
-  trips: { trip: Trip; phase: ReturnType<typeof tripPhase> }[];
+  trips: { trip: TripListItem; phase: ReturnType<typeof tripPhase> }[];
   today: string;
   priorityFirst?: boolean;
 }) {
@@ -44,7 +44,7 @@ function TripGroup({
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {trips.map(({ trip, phase }, i) => (
           <TripCard key={trip.id} trip={trip} phase={phase} today={today} priority={priorityFirst && i === 0} />
         ))}
@@ -78,6 +78,7 @@ export default async function TripsPage({ searchParams }: PageProps<"/trips">) {
   return (
     <main className="mx-auto max-w-[1280px] px-4 pt-8 pb-16 sm:px-6 sm:pt-12 lg:px-8">
       {params.deleted ? <FlashToast message="Trip deleted." /> : null}
+      {params.left ? <FlashToast message="You left the trip." /> : null}
 
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-4 sm:gap-6">

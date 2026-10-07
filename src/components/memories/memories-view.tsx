@@ -98,7 +98,7 @@ export function MemoriesView({
     );
 
   const reflection = (
-    <div className="grid gap-5 lg:grid-cols-12">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
       <ReflectionCard tripId={trip.id} memory={memory} phase={phase} className="lg:col-span-8" />
       <AlbumCard tripId={trip.id} url={memory?.photo_album_url ?? null} className="lg:col-span-4" />
     </div>
@@ -347,7 +347,7 @@ function FavoritesStrip({ tripId, favorites }: { tripId: string; favorites: Itin
           Show only favorites <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
       </div>
-      <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {favorites.slice(0, 6).map((v) => (
           <li key={v.id}>
             <a
@@ -426,7 +426,7 @@ function Journal({
                   scroll={false}
                   aria-current={filter === t.key ? "page" : undefined}
                   className={cn(
-                    "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition-colors",
+                    "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition-colors",
                     filter === t.key ? "bg-white text-ink shadow-sm" : "text-muted-foreground hover:text-ink",
                   )}
                 >

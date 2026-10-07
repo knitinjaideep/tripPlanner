@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { deletePlace } from "@/app/actions/places";
 import { ConfirmDialog } from "@/components/trip/confirm-dialog";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exploreHref, type ExploreFilters } from "@/lib/explore";
 import type { PlaceWithVisits } from "@/lib/types";
@@ -62,7 +63,7 @@ export function ExploreWorkspace({
     return [
       `“${r.place.name}” is on your itinerary ${r.visits === 1 ? "once" : `${r.visits} times`}${done ? ` (${done} completed)` : ""}.`,
       "Removing the place keeps those visits — with their notes, ratings and reflections — as activities named",
-      `“${r.place.name}”. Only the place’s own details (address, links, planning notes) are deleted.`,
+      `“${r.place.name}”. Only the place’s own details (address, links, shared notes) are deleted.`,
     ].join(" ");
   };
 
@@ -129,6 +130,8 @@ export function ExploreWorkspace({
 /** "Add place" trigger usable from server-rendered markup. */
 export function AddPlaceButton({ className, children }: { className?: string; children: ReactNode }) {
   const { newPlace } = useExplore();
+  const { canEdit } = useTripAccess();
+  if (!canEdit) return null;
   return (
     <button type="button" onClick={newPlace} className={className}>
       {children}

@@ -20,7 +20,7 @@ import { PlanUpdateCard } from "./plan-update";
 import type { TripDayOption } from "./types";
 
 const navButton =
-  "focus-ring grid size-11 place-items-center rounded-xl border border-border bg-surface text-ink hover:bg-secondary";
+  "focus-ring grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-surface text-ink hover:bg-secondary";
 
 /** The Itinerary tab for one trip; the selected day comes from `?day=`. */
 export function ItineraryView({
@@ -84,7 +84,7 @@ export function ItineraryView({
       bookings={trip.reservations}
       linkedBookingIds={items.flatMap((i) => (i.reservation_id ? [i.reservation_id] : []))}
     >
-      <div className="grid gap-8 lg:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-12">
         <div className="min-w-0 space-y-6 lg:col-span-8">
           {outsideCount > 0 ? (
             <details open className="group rounded-2xl border border-gold/60 bg-gold-soft/50 p-4 sm:p-5">

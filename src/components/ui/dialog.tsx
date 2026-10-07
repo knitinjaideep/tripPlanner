@@ -47,13 +47,24 @@ function DialogOverlay({
   )
 }
 
+/**
+ * Classes that turn the centered dialog into a full-screen sheet below the
+ * `sm` breakpoint (phones, narrow Split View) — longer forms get the whole
+ * viewport (dynamic height, so the on-screen keyboard and browser bars are
+ * accounted for) instead of a cramped card.
+ */
+const FULL_SCREEN_ON_PHONE =
+  "max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:data-open:zoom-in-100"
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  fullScreenOnPhone = false,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  fullScreenOnPhone?: boolean
 }) {
   return (
     <DialogPortal>
@@ -61,7 +72,8 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-1rem)] grid-cols-[minmax(0,1fr)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          fullScreenOnPhone && FULL_SCREEN_ON_PHONE,
           className
         )}
         {...props}

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { secondaryButtonClass } from "@/components/forms/fields";
+import { Attribution, useTripAccess } from "./trip-access";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, stayNights } from "@/lib/booking-format";
 import { readDetails } from "@/lib/reservation-details";
@@ -213,7 +214,7 @@ export function TripWorkspace({
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-0.5 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-[0.9375rem] break-words text-ink">{children}</dd>
     </div>
@@ -237,6 +238,7 @@ function BookingDetails({
   const start = formatMoment(b.start_date, b.start_time, false, b.start_time_zone);
   const end = formatMoment(b.end_date, b.end_time, false, b.end_time_zone);
   const nights = stayNights(b);
+  const { canEdit } = useTripAccess();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -300,13 +302,15 @@ function BookingDetails({
         <section className="rounded-2xl bg-surface-warm p-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="eyebrow text-earth-ink">Documents</h3>
-            <button
-              type="button"
-              onClick={onAddDocument}
-              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-earth-ink hover:bg-white/60"
-            >
-              <Plus className="size-4" aria-hidden="true" /> Add link
-            </button>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={onAddDocument}
+                className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-earth-ink hover:bg-white/60"
+              >
+                <Plus className="size-4" aria-hidden="true" /> Add link
+              </button>
+            ) : null}
           </div>
           {documents.length > 0 ? (
             <ul className="mt-2 space-y-2">
@@ -315,23 +319,33 @@ function BookingDetails({
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-sm text-earth-ink">Attach the ticket, voucher or confirmation from Drive.</p>
+            <p className="mt-1 text-sm text-earth-ink">
+              {canEdit ? "Attach the ticket, voucher or confirmation from Drive." : "No document links yet."}
+            </p>
           )}
         </section>
+        <Attribution createdBy={b.created_by} updatedBy={b.updated_by} />
       </div>
 
-      <div className="flex gap-3 border-t border-border bg-surface px-5 py-4 sm:px-6">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-[0.9375rem] font-semibold text-destructive hover:bg-[#fff1ee]"
-        >
-          <Trash2 className="size-4" aria-hidden="true" /> Delete
-        </button>
-        <button type="button" onClick={onEdit} className={`${secondaryButtonClass} ml-auto`}>
-          <Pencil className="size-4" aria-hidden="true" /> Edit
-        </button>
-      </div>
+      {canEdit ? (
+        <div className="space-y-2 border-t border-border bg-surface px-5 py-4 sm:px-6">
+          <p className="text-xs text-muted-foreground">
+            This is your record in Atlas. Editing or deleting it doesn’t change or cancel the real reservation.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onDelete}
+              className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-[0.9375rem] font-semibold text-destructive hover:bg-[#fff1ee]"
+            >
+              <Trash2 className="size-4" aria-hidden="true" /> Delete
+            </button>
+            <button type="button" onClick={onEdit} className={`${secondaryButtonClass} ml-auto`}>
+              <Pencil className="size-4" aria-hidden="true" /> Edit
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -348,6 +362,8 @@ export function AddBookingButton({
   className?: string;
 }) {
   const { newBooking } = useTripWorkspace();
+  const { canEdit } = useTripAccess();
+  if (!canEdit) return null;
   return (
     <button type="button" onClick={() => newBooking(kind)} className={className}>
       {children}
@@ -376,6 +392,8 @@ export function ViewBookingButton({
 
 export function AddDocumentButton({ children, className }: { children: ReactNode; className?: string }) {
   const { newDocument } = useTripWorkspace();
+  const { canEdit } = useTripAccess();
+  if (!canEdit) return null;
   return (
     <button type="button" onClick={() => newDocument(null)} className={className}>
       {children}

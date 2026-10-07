@@ -1,5 +1,6 @@
 "use client";
 
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useState } from "react";
 import { ExternalLink, Images, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ function albumHost(url: string) {
  * the link — it never uploads, imports or looks inside the album.
  */
 export function AlbumCard({ tripId, url, className }: { tripId: string; url: string | null; className?: string }) {
+  const { canEdit } = useTripAccess();
   const [editing, setEditing] = useState(false);
   const [session, setSession] = useState(0);
   const [removing, setRemoving] = useState(false);
@@ -64,27 +66,31 @@ export function AlbumCard({ tripId, url, className }: { tripId: string; url: str
           <p className="mt-3 text-xs text-earth-ink">
             A link only — Atlas can’t see what’s inside, and who can open it is set where the album lives.
           </p>
-          <div className="mt-auto flex flex-wrap gap-1 pt-3">
-            <button type="button" onClick={edit} className={cn(smallButton, "-ml-2.5")}>
-              <Pencil className="size-4" aria-hidden="true" /> Change link
-            </button>
-            <button type="button" onClick={() => setRemoving(true)} className={smallButton}>
-              <Trash2 className="size-4" aria-hidden="true" /> Remove
-            </button>
-          </div>
+          {canEdit ? (
+            <div className="mt-auto flex flex-wrap gap-1 pt-3">
+              <button type="button" onClick={edit} className={cn(smallButton, "-ml-2.5")}>
+                <Pencil className="size-4" aria-hidden="true" /> Change link
+              </button>
+              <button type="button" onClick={() => setRemoving(true)} className={smallButton}>
+                <Trash2 className="size-4" aria-hidden="true" /> Remove
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
         <>
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-earth-ink">
             Keep your Google Photos or Drive album one tap away. Atlas stores the link only — your photos stay where they are.
           </p>
-          <button
-            type="button"
-            onClick={edit}
-            className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border-[1.5px] border-earth-ink px-5 text-[0.9375rem] font-semibold text-earth-ink transition-colors hover:bg-white/60"
-          >
-            <Plus className="size-4" aria-hidden="true" /> Add album link
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={edit}
+              className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border-[1.5px] border-earth-ink px-5 text-[0.9375rem] font-semibold text-earth-ink transition-colors hover:bg-white/60"
+            >
+              <Plus className="size-4" aria-hidden="true" /> Add album link
+            </button>
+          ) : null}
         </>
       )}
 

@@ -6,9 +6,9 @@ import {
   deleteReservationForUser,
   updateReservationForUser,
 } from "@/lib/dal";
-import { detailFields, formFields, reservationSchema } from "@/lib/validation";
+import { detailFields, expectedUpdatedAtSchema, formFields, reservationSchema } from "@/lib/validation";
 import type { ActionState } from "@/lib/types";
-import { guarded, invalid, notFound } from "./shared";
+import { conflictState, guarded, invalid, notFound } from "./shared";
 
 const RESERVATION_FIELDS = [
   "kind",
@@ -44,8 +44,14 @@ export async function saveReservation(
 
   const result = await guarded(reservationId ? "updateReservation" : "createReservation", async () => {
     if (reservationId) {
-      const updated = await updateReservationForUser(tripId, reservationId, parsed.data);
+      const updated = await updateReservationForUser(
+        tripId,
+        reservationId,
+        parsed.data,
+        expectedUpdatedAtSchema.parse(formData.get("expected_updated_at") ?? undefined),
+      );
       if (updated.ok) return { ok: true, message: "Booking updated." };
+      if (updated.reason === "conflict") return conflictState(tripId, "booking", reservationId, "booking");
       if (updated.reason === "linked_visit_needs_date") {
         return {
           ok: false,

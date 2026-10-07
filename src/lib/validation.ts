@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseEmail } from "@/lib/sharing";
 import { RESERVATION_KINDS, RESERVATION_STATUSES, type ReservationKind } from "@/lib/types";
 import { COVER_KEYS } from "@/lib/cover-keys";
 import { DETAIL_FIELDS } from "@/lib/reservation-details";
@@ -420,3 +421,33 @@ export function detailFields(formData: FormData) {
   }
   return details;
 }
+
+/* ------------------------------- sharing ------------------------------- */
+
+const inviteRole = z.enum(["editor", "viewer"], { error: "Choose Editor or Viewer." });
+
+/** An invitation by email (the address is required and normalized) — the role defaults to Editor. */
+export const emailInviteSchema = z.object({
+  email: z
+    .string()
+    .max(320, "That email address is too long.")
+    .transform((v, ctx) => {
+      const email = parseEmail(v);
+      if (!email) ctx.addIssue({ code: "custom", message: "Enter a valid email address." });
+      return email ?? "";
+    }),
+  role: inviteRole.default("editor"),
+});
+
+/** A copied link has no address — only a role. */
+export const linkInviteSchema = z.object({ role: inviteRole.default("editor") });
+
+export const memberRoleSchema = z.object({ userId: z.string().min(1).max(255), role: inviteRole });
+
+/** Optional "the version I started from" token for edit forms (an ISO-like timestamp). */
+export const expectedUpdatedAtSchema = z
+  .string()
+  .max(64)
+  .regex(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z)?$/)
+  .optional()
+  .catch(undefined);

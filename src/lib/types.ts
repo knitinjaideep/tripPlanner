@@ -25,10 +25,22 @@ export type ReservationKind = (typeof RESERVATION_KINDS)[number];
 export const RESERVATION_STATUSES = ["confirmed", "cancelled"] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
+/**
+ * Who added / last changed a shared row. Always present when read from the
+ * database; optional here so plain data (plans, fixtures) need not invent it.
+ */
+type Attributed<T> = Omit<T, "created_by" | "updated_by"> & {
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
 /** Row shapes as read from the database (dates are "YYYY-MM-DD" strings). */
 export type Trip = TripRow;
-export type Reservation = ReservationRow;
-export type TripDocument = DocumentRow;
+export type Reservation = Attributed<ReservationRow>;
+export type TripDocument = Attributed<DocumentRow>;
+
+/** A trip in the signed-in user's list: owned, or shared with them (role + who owns it). */
+export type TripListItem = Trip & { role: "owner" | "editor" | "viewer"; owner_name: string | null };
 
 export type TripWithDetails = Trip & {
   reservations: Reservation[];
@@ -66,11 +78,11 @@ export type DocumentInput = Pick<TripDocument, "reservation_id" | "label" | "url
 
 /* ------------------ Explore, Itinerary, Packing, Memories ------------------ */
 
-export type Place = PlaceRow;
-export type ItineraryItem = ItineraryItemRow;
-export type PackingCategory = PackingCategoryRow;
-export type PackingItem = PackingItemRow;
-export type TripMemory = TripMemoryRow;
+export type Place = Attributed<PlaceRow>;
+export type ItineraryItem = Attributed<ItineraryItemRow>;
+export type PackingCategory = Attributed<PackingCategoryRow>;
+export type PackingItem = Attributed<PackingItemRow>;
+export type TripMemory = Attributed<TripMemoryRow>;
 
 /**
  * An Explore place plus what the itinerary says about it (derived, never
@@ -82,6 +94,8 @@ export type PlaceWithVisits = Place & {
   planned_count: number;
   completed_count: number;
   visited: boolean;
+  /** The signed-in member's private "Your notes" for this place (never the shared notes). */
+  my_notes?: string | null;
   /** Average of completed visits' ratings; null when none are rated. */
   rating_avg: number | null;
   rated_count: number;
@@ -157,4 +171,12 @@ export type ActionState = {
   fieldErrors?: Record<string, string[] | undefined>;
   /** Set when the session ended, so the form can offer a sign-in link. */
   signedOut?: boolean;
+  /** Set when the signed-in role does not allow the change (a viewer). Nothing was saved. */
+  forbidden?: boolean;
+  /**
+   * Set when someone else changed the record after this form was opened.
+   * Nothing was overwritten; `latestUpdatedAt` is the token to send to
+   * deliberately save over it.
+   */
+  conflict?: { latestUpdatedAt: string | null };
 };

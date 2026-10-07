@@ -16,6 +16,7 @@ import {
   TimeZoneField,
   secondaryButtonClass,
 } from "@/components/forms/fields";
+import { ConflictGuard } from "@/components/forms/conflict";
 import { useFormAction } from "@/components/forms/use-form-action";
 import { BOOKING_ICONS } from "./booking-icon";
 
@@ -54,7 +55,11 @@ export function BookingForm({ tripId, tripTimeZone, booking, initialKind = "flig
   return (
     <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-6 sm:px-6">
-        <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
+        <FormMessage message={state.ok || state.conflict ? undefined : state.message} signedOut={state.signedOut} />
+        <ConflictGuard state={state} expectedUpdatedAt={booking?.updated_at} onDiscard={onCancel} />
+        <p className="rounded-xl bg-surface-warm px-3.5 py-2.5 text-sm text-earth-ink">
+          This is your record in Atlas. Saving it doesn’t change, book or cancel the real reservation — do that with the provider.
+        </p>
 
         <fieldset>
           <legend className="mb-2.5 text-sm font-semibold text-ink">Type</legend>
@@ -97,7 +102,7 @@ export function BookingForm({ tripId, tripTimeZone, booking, initialKind = "flig
           maxLength={160}
           autoComplete="off"
         />
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2">
           <TextField
             idPrefix={p}
             name="provider"
@@ -123,7 +128,7 @@ export function BookingForm({ tripId, tripTimeZone, booking, initialKind = "flig
         </div>
 
         {meta.route ? (
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2">
             <TextField
               idPrefix={p}
               name="origin"
@@ -195,7 +200,7 @@ export function BookingForm({ tripId, tripTimeZone, booking, initialKind = "flig
         </fieldset>
 
         {detailFields.length > 0 ? (
-          <fieldset key={kind} className="grid gap-5 sm:grid-cols-2">
+          <fieldset key={kind} className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2">
             <legend className="sr-only">{meta.label} details</legend>
             {detailFields.map((field) => (
               <TextField

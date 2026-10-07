@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { CircleAlert, CircleCheck, Loader2, Sparkles, X } from "lucide-react";
@@ -30,7 +32,7 @@ const primary =
  * the card disappears once everything is in — except for the result summary,
  * which stays until dismissed so flagged duplicates aren't missed.
  */
-export function CollectionImportCard({
+function CollectionImportCardInner({
   tripId,
   tripTitle,
   offer,
@@ -148,7 +150,7 @@ export function CollectionImportCard({
             <button
               type="button"
               onClick={() => setResult(null)}
-              className="focus-ring -m-1.5 grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-white/70 hover:text-ink"
+              className="focus-ring -m-1.5 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-white/70 hover:text-ink"
               aria-label="Dismiss"
             >
               <X className="size-4" aria-hidden="true" />
@@ -167,4 +169,10 @@ export function CollectionImportCard({
       {body}
     </section>
   );
+}
+
+/** Editors and the owner only; viewers never see this control (the server refuses it regardless). */
+export function CollectionImportCard(props: ComponentProps<typeof CollectionImportCardInner>) {
+  const { canEdit } = useTripAccess();
+  return canEdit ? <CollectionImportCardInner {...props} /> : null;
 }

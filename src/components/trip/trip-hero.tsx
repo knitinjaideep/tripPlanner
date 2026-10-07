@@ -1,10 +1,10 @@
+import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, Clock } from "lucide-react";
 import { getCover } from "@/lib/covers";
 import { daysUntil, formatDateRange, tripLengthDays, tripPhase } from "@/lib/dates";
 import type { Trip } from "@/lib/types";
-import { TripActions } from "./trip-actions";
 
 export function statusLabel(trip: Trip, today: string) {
   const phase = tripPhase(trip.start_date, trip.end_date, today);
@@ -17,7 +17,8 @@ export function statusLabel(trip: Trip, today: string) {
   return days === 1 ? "Tomorrow!" : `${days} days to go`;
 }
 
-export function TripHero({ trip, today }: { trip: Trip; today: string }) {
+/** `actions`: the share button and (for the owner) the trip menu, built by the layout. */
+export function TripHero({ trip, today, actions }: { trip: Trip; today: string; actions: ReactNode }) {
   const cover = getCover(trip.cover_image);
 
   return (
@@ -44,7 +45,7 @@ export function TripHero({ trip, today }: { trip: Trip; today: string }) {
           >
             <ChevronLeft className="size-4" aria-hidden="true" /> All trips
           </Link>
-          <TripActions tripId={trip.id} title={trip.title} />
+          {actions}
         </div>
 
         <div className="max-w-3xl text-white">

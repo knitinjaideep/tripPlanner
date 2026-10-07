@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { Suspense, use, useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -39,7 +41,7 @@ const primary =
  * read-only preview; nothing is written until Apply, which sends the
  * preview's token so the server applies exactly what was shown.
  */
-export function PlanUpdateCard({
+function PlanUpdateCardInner({
   tripId,
   planId,
   label,
@@ -66,11 +68,11 @@ export function PlanUpdateCard({
           <span className="grid size-10 shrink-0 place-items-center rounded-full bg-gold-soft text-gold-ink">
             <Sparkles className="size-5" aria-hidden="true" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[min(100%,14rem)] flex-1 basis-48">
             <p className="font-semibold text-ink">Update {label}</p>
             <p className="text-sm text-muted-foreground">{pendingText(pending)} — review before anything is saved.</p>
           </div>
-          <button type="button" onClick={review} className={primary}>
+          <button type="button" onClick={review} className={cn(primary, "max-sm:w-full")}>
             Review update
           </button>
         </div>
@@ -440,7 +442,7 @@ function ConflictRow({
               onChange={() => onChoose(value)}
               className="peer sr-only"
             />
-            <span className="inline-flex min-h-10 items-center rounded-lg border border-input bg-white px-3 text-sm font-medium text-ink peer-checked:border-moss peer-checked:bg-moss-soft peer-checked:text-moss-ink peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
+            <span className="inline-flex min-h-11 items-center rounded-lg border border-input bg-white px-3 text-sm font-medium text-ink peer-checked:border-moss peer-checked:bg-moss-soft peer-checked:text-moss-ink peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
               {text}
             </span>
           </label>
@@ -500,4 +502,10 @@ function ChangesByDay({ ops }: { ops: ChangeOp[] }) {
       })}
     </section>
   );
+}
+
+/** Editors and the owner only; viewers never see this control (the server refuses it regardless). */
+export function PlanUpdateCard(props: ComponentProps<typeof PlanUpdateCardInner>) {
+  const { canEdit } = useTripAccess();
+  return canEdit ? <PlanUpdateCardInner {...props} /> : null;
 }

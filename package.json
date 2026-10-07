@@ -15,6 +15,7 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "drizzle-kit migrate",
     "test:authz": "tsx --conditions=react-server scripts/test-authorization.ts",
+    "test:sharing": "tsx --conditions=react-server scripts/test-sharing.ts",
     "test:itinerary": "tsx scripts/test-itinerary.ts",
     "test:explore": "tsx scripts/test-explore.ts",
     "test:packing": "tsx scripts/test-packing.ts",

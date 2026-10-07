@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -29,7 +31,7 @@ type Mode = "existing" | "new";
  * something unplanned as a completed activity. Either way it is an
  * itinerary row — nothing is stored separately for Memories.
  */
-export function CaptureMomentButton({
+function CaptureMomentButtonInner({
   tripId,
   candidates,
   days,
@@ -335,4 +337,10 @@ function NewForm({ tripId, days, onDirty, onPending, onDone, onCancel }: FormPro
       <Buttons pending={pending} onCancel={onCancel} />
     </form>
   );
+}
+
+/** Editors and the owner only; viewers never see this control (the server refuses it regardless). */
+export function CaptureMomentButton(props: ComponentProps<typeof CaptureMomentButtonInner>) {
+  const { canEdit } = useTripAccess();
+  return canEdit ? <CaptureMomentButtonInner {...props} /> : null;
 }

@@ -9,6 +9,7 @@ import {
   PackingCard,
   StayCard,
 } from "@/components/trip/overview-cards";
+import { FlashToast } from "@/components/flash-toast";
 import { MomentsCard, TripMemoryCard } from "@/components/trip/memory-cards";
 import { getItineraryForUser, getMemoriesForUser, getPackingForUser, getTripForUser } from "@/lib/dal";
 import { todayInTimeZone } from "@/lib/dates";
@@ -26,8 +27,8 @@ export async function generateMetadata({ params }: PageProps<"/trips/[tripId]">)
  * before → reservations and preparation; during → today's plan and quick
  * access to bookings / documents; after → the reflection, favorites, album.
  */
-export default async function TripOverviewPage({ params }: PageProps<"/trips/[tripId]">) {
-  const { tripId } = await params;
+export default async function TripOverviewPage({ params, searchParams }: PageProps<"/trips/[tripId]">) {
+  const [{ tripId }, query] = await Promise.all([params, searchParams]);
   const [trip, items, packing, memories, timeZone] = await Promise.all([
     getTripForUser(tripId),
     getItineraryForUser(tripId),
@@ -36,14 +37,16 @@ export default async function TripOverviewPage({ params }: PageProps<"/trips/[tr
     getViewerTimeZone(),
   ]);
   if (!trip || !items || !packing || !memories) notFound();
+  const joined = query.joined ? <FlashToast message="You joined the trip." /> : null;
   const today = todayInTimeZone(timeZone);
   const todayInTripZone = todayInTimeZone(trip.time_zone);
   const phase = journalPhase(trip.start_date, trip.end_date, todayInTripZone);
 
   if (phase === "during") {
     return (
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12 *:min-w-0">
         <h2 className="sr-only">Overview</h2>
+        {joined}
         <DayPlanCard trip={trip} items={items} todayInTripZone={todayInTripZone} />
         <DocumentsCard trip={trip} />
         <FlightCard trip={trip} today={today} />
@@ -58,8 +61,9 @@ export default async function TripOverviewPage({ params }: PageProps<"/trips/[tr
 
   if (phase === "after") {
     return (
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12 *:min-w-0">
         <h2 className="sr-only">Overview</h2>
+        {joined}
         <TripMemoryCard tripId={trip.id} memory={memories.memory} visits={items} className="lg:col-span-8" />
         <DocumentsCard trip={trip} />
         <FlightCard trip={trip} today={today} />
@@ -73,8 +77,9 @@ export default async function TripOverviewPage({ params }: PageProps<"/trips/[tr
   }
 
   return (
-    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12 *:min-w-0">
       <h2 className="sr-only">Overview</h2>
+        {joined}
       <FlightCard trip={trip} today={today} />
       <StayCard trip={trip} today={today} />
       <GlanceCard trip={trip} />

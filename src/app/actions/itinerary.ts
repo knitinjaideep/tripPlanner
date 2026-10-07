@@ -20,12 +20,13 @@ import {
   itineraryOrderSchema,
   itineraryStatusSchema,
   reflectionSchema,
+  expectedUpdatedAtSchema,
   requestIdSchema,
   visitReviewSchema,
 } from "@/lib/validation";
 import { ITINERARY_CATEGORIES, type ItineraryCategory, type ItineraryStatus } from "@/lib/plan-options";
 import type { ActionState } from "@/lib/types";
-import { guarded, invalid, notFound } from "./shared";
+import { conflictState, guarded, invalid, notFound } from "./shared";
 
 const ITEM_FIELDS = [
   "place_id",
@@ -107,18 +108,18 @@ export async function saveItineraryItem(
   if (!parsed.success) return invalid(parsed.error);
   const saveToExplore = formData.get("save_to_explore") === "on";
   const requestId = requestIdSchema.safeParse(formData.get("request_id") ?? "");
+  const expectedUpdatedAt = expectedUpdatedAtSchema.parse(formData.get("expected_updated_at") ?? undefined);
 
-  const result = await guarded(itemId ? "updateItineraryItem" : "createItineraryItem", async () =>
-    visitWriteState(
-      itemId
-        ? await updateItineraryItemForUser(tripId, itemId, parsed.data, { saveToExplore })
-        : await createItineraryItemForUser(tripId, parsed.data, {
-            saveToExplore,
-            requestId: requestId.success ? requestId.data : undefined,
-          }),
-      Boolean(itemId),
-    ),
-  );
+  const result = await guarded(itemId ? "updateItineraryItem" : "createItineraryItem", async () => {
+    const outcome = itemId
+      ? await updateItineraryItemForUser(tripId, itemId, parsed.data, { saveToExplore, expectedUpdatedAt })
+      : await createItineraryItemForUser(tripId, parsed.data, {
+          saveToExplore,
+          requestId: requestId.success ? requestId.data : undefined,
+        });
+    if (!outcome.ok && outcome.reason === "conflict" && itemId) return conflictState(tripId, "itinerary", itemId, "entry");
+    return visitWriteState(outcome, Boolean(itemId));
+  });
 
   if (result.ok) refresh(tripId);
   return result;

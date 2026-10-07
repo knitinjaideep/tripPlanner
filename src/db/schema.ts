@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   time,
   timestamp,
@@ -51,6 +52,12 @@ const timestamps = {
     .notNull()
     .defaultNow()
     .$onUpdate(() => sql`now()`),
+};
+
+/** Who added / last changed the row (a user ID; set by a trigger from the acting session, never trusted from the browser). */
+const attribution = {
+  created_by: text(),
+  updated_by: text(),
 };
 
 export const trips = pgTable(
@@ -107,6 +114,7 @@ export const reservations = pgTable(
     notes: text(),
     /** Type-specific fields (flight number, room type…), validated per kind. */
     details: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -155,6 +163,7 @@ export const documents = pgTable(
     reservation_id: uuid(),
     label: text().notNull(),
     url: text().notNull(),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -218,6 +227,7 @@ export const places = pgTable(
      * traveler's own fields above are never touched by it.
      */
     recommendation: jsonb().$type<Recommendation>(),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -300,6 +310,7 @@ export const itineraryItems = pgTable(
     source_key: text(),
     /** Fingerprint of the planning fields as the plan last wrote them — tells later updates whether they were hand-edited. */
     source_fingerprint: text(),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -368,6 +379,7 @@ export const packingCategories = pgTable(
     owner_id: text().notNull(),
     name: text().notNull(),
     sort_order: integer().notNull().default(0),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -400,6 +412,7 @@ export const packingItems = pgTable(
     notes: text(),
     is_packed: boolean().notNull().default(false),
     sort_order: integer().notNull().default(0),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -436,6 +449,7 @@ export const tripMemories = pgTable(
     would_return: text({ enum: WOULD_RETURN }),
     lessons_for_next_time: text(),
     photo_album_url: text(),
+    ...attribution,
     ...timestamps,
   },
   (t) => [
@@ -466,3 +480,135 @@ export type ItineraryItemRow = typeof itineraryItems.$inferSelect;
 export type PackingCategoryRow = typeof packingCategories.$inferSelect;
 export type PackingItemRow = typeof packingItems.$inferSelect;
 export type TripMemoryRow = typeof tripMemories.$inferSelect;
+
+/* ------------------------------- sharing ------------------------------- */
+
+export const MEMBER_ROLES = ["editor", "viewer"] as const;
+export type MemberRole = (typeof MEMBER_ROLES)[number];
+
+/**
+ * Display details of people who appear on shared trips, copied from the
+ * verified session when they act (invite, accept, open a shared trip). Neon
+ * Auth's own schema is never read from here. Names are shown to co-members;
+ * the email is only ever shown to the trip owner.
+ */
+export const userProfiles = pgTable(
+  "user_profiles",
+  {
+    user_id: text().primaryKey(),
+    display_name: text().notNull(),
+    email: text(),
+    updated_at: timestamp({ withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("user_profiles_name_length", sql`char_length(${t.display_name}) between 1 and 120`),
+    check("user_profiles_email_length", sql`char_length(${t.email}) <= 320`),
+  ],
+);
+
+/**
+ * People a trip is shared with. The trip's single owner stays `trips.owner_id`
+ * and is never a row here (CHECK + composite FK keep `owner_id` the trip's
+ * owner). Removing a member deletes only this row — everything they added
+ * stays on the trip (rows carry `created_by` as plain text, no foreign key).
+ */
+export const tripMembers = pgTable(
+  "trip_members",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    trip_id: uuid().notNull(),
+    owner_id: text().notNull(),
+    user_id: text().notNull(),
+    role: text({ enum: MEMBER_ROLES }).notNull(),
+    invited_by: text().notNull(),
+    joined_at: timestamp({ withTimezone: true, mode: "string" }).notNull().defaultNow(),
+    updated_at: timestamp({ withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("trip_members_trip_user_unique").on(t.trip_id, t.user_id),
+    foreignKey({
+      name: "trip_members_trip_same_owner_fk",
+      columns: [t.trip_id, t.owner_id],
+      foreignColumns: [trips.id, trips.owner_id],
+    }).onDelete("cascade"),
+    index("trip_members_user_idx").on(t.user_id),
+    check("trip_members_role_valid", inList(t.role, MEMBER_ROLES)),
+    check("trip_members_not_owner", sql`${t.user_id} <> ${t.owner_id}`),
+    check("trip_members_user_length", sql`char_length(${t.user_id}) between 1 and 255`),
+  ],
+);
+
+/**
+ * An offer to join a trip. Only the SHA-256 of the token is stored. An
+ * email-bound invitation (`email` set) can only be accepted by a session whose
+ * verified email matches; a copied link (`email` null) by any signed-in
+ * person who explicitly accepts. Single use: the first acceptance wins.
+ * Resending or "new link" replaces `token_hash`, which kills the old link.
+ */
+export const tripInvitations = pgTable(
+  "trip_invitations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    trip_id: uuid().notNull(),
+    owner_id: text().notNull(),
+    invited_by: text().notNull(),
+    /** Display snapshot for the invitation page (the inviter's name at the time). */
+    inviter_name: text().notNull(),
+    /** Normalized (trimmed, lower-cased) intended email; null for a copied link. */
+    email: text(),
+    role: text({ enum: MEMBER_ROLES }).notNull(),
+    token_hash: text().notNull(),
+    expires_at: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+    accepted_at: timestamp({ withTimezone: true, mode: "string" }),
+    accepted_by: text(),
+    revoked_at: timestamp({ withTimezone: true, mode: "string" }),
+    /** not_sent | sent | failed | not_configured — only "sent" after the provider accepted the message. */
+    delivery_status: text().notNull().default("not_sent"),
+    last_sent_at: timestamp({ withTimezone: true, mode: "string" }),
+    send_count: integer().notNull().default(0),
+    created_at: timestamp({ withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("trip_invitations_token_hash_unique").on(t.token_hash),
+    foreignKey({
+      name: "trip_invitations_trip_same_owner_fk",
+      columns: [t.trip_id, t.owner_id],
+      foreignColumns: [trips.id, trips.owner_id],
+    }).onDelete("cascade"),
+    index("trip_invitations_trip_idx").on(t.trip_id, t.created_at),
+    check("trip_invitations_role_valid", inList(t.role, MEMBER_ROLES)),
+    check("trip_invitations_email_length", sql`char_length(${t.email}) between 3 and 320`),
+    check("trip_invitations_delivery_valid", sql`${t.delivery_status} in ('not_sent', 'sent', 'failed', 'not_configured')`),
+    check("trip_invitations_one_outcome", sql`not (${t.accepted_at} is not null and ${t.revoked_at} is not null)`),
+    check("trip_invitations_accepted_pair", sql`(${t.accepted_at} is null) = (${t.accepted_by} is null)`),
+  ],
+);
+
+/**
+ * Per-member private state on an Explore place: the heart and "Your notes".
+ * Only the person it belongs to ever reads or writes it.
+ */
+export const placeMemberState = pgTable(
+  "place_member_state",
+  {
+    place_id: uuid().notNull(),
+    trip_id: uuid().notNull(),
+    user_id: text().notNull(),
+    is_favorite: boolean().notNull().default(false),
+    notes: text(),
+    updated_at: timestamp({ withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "place_member_state_pk", columns: [t.place_id, t.user_id] }),
+    foreignKey({
+      name: "place_member_state_place_same_trip_fk",
+      columns: [t.place_id, t.trip_id],
+      foreignColumns: [places.id, places.trip_id],
+    }).onDelete("cascade"),
+    index("place_member_state_trip_user_idx").on(t.trip_id, t.user_id),
+    check("place_member_state_notes_length", sql`char_length(${t.notes}) <= 5000`),
+  ],
+);
+
+export type TripMemberRow = typeof tripMembers.$inferSelect;
+export type TripInvitationRow = typeof tripInvitations.$inferSelect;

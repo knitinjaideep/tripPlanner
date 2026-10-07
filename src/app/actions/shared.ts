@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
-import { AuthRequiredError } from "@/lib/dal";
+import { AuthRequiredError, ForbiddenError, getRowChangeForUser, type ChangeKind } from "@/lib/dal";
 import { SessionUnavailableError } from "@/lib/user";
 import type { ActionState } from "@/lib/types";
 
@@ -33,8 +33,24 @@ export async function guarded(context: string, run: () => Promise<ActionState>):
     unstable_rethrow(error);
     if (error instanceof AuthRequiredError) return SIGNED_OUT;
     if (error instanceof SessionUnavailableError) return { ok: false, message: error.message };
+    if (error instanceof ForbiddenError) return { ok: false, forbidden: true, message: error.message };
     const pg = error as { code?: string; cause?: { code?: string } };
     console.error(`[rove] ${context} failed:`, pg.cause?.code ?? pg.code ?? (error as Error)?.name);
     return { ok: false, message: "Something went wrong saving that. Nothing was changed — please try again." };
   }
+}
+
+/**
+ * Someone else saved this record after the form was opened. Nothing was
+ * overwritten; the form keeps the draft and can deliberately save over the
+ * newer version using `latestUpdatedAt`.
+ */
+export async function conflictState(tripId: string, kind: ChangeKind, id: string, what: string): Promise<ActionState> {
+  const latest = await getRowChangeForUser(tripId, kind, id);
+  const who = latest?.by ? latest.by : "Someone else";
+  return {
+    ok: false,
+    conflict: { latestUpdatedAt: latest?.updatedAt ?? null },
+    message: `${who} changed this ${what} while you were editing. Your changes haven’t been saved and are still here.`,
+  };
 }

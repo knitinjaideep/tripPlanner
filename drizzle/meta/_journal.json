@@ -43,6 +43,13 @@
       "when": 1791310373396,
       "tag": "0005_explore_recommendations",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791376688995,
+      "tag": "0006_trip_sharing",
+      "breakpoints": true
     }
   ]
 }

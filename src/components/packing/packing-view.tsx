@@ -54,6 +54,7 @@ import { cn } from "@/lib/utils";
 import { PackingCategoryIcon } from "./category-icon";
 import { CopyDialog, DeleteCategoryDialog, StarterDialog } from "./packing-dialogs";
 import { PackingCategoryForm, PackingItemForm } from "./packing-forms";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { usePackedToggles } from "./use-packed-toggles";
 
 const addButton =
@@ -106,6 +107,7 @@ export function PackingView({
   categories: PackingCategoryWithItems[];
   sources: PackingSource[];
 }) {
+  const { canEdit, isOwner } = useTripAccess();
   const [structure, patch] = useOptimistic(saved, applyPatch);
   const [, startTransition] = useTransition();
   const { shown, setPacked } = usePackedToggles(tripId, saved);
@@ -141,7 +143,8 @@ export function PackingView({
   const [announcement, setAnnouncement] = useState("");
 
   const deleting = categories.find((c) => c.id === deletingId);
-  const copyAvailable = sources.some((s) => s.categories.some((c) => c.items.length > 0));
+  // Copying reads the owner's other trips, so only the owner is offered it.
+  const copyAvailable = isOwner && sources.some((s) => s.categories.some((c) => c.items.length > 0));
 
   const run = (p: Patch, action: () => Promise<ActionState>, done?: string) =>
     startTransition(async () => {
@@ -181,6 +184,7 @@ export function PackingView({
 
   const actions = {
     tripId,
+    canEdit,
     canReorder,
     categories,
     setPacked,
@@ -212,7 +216,7 @@ export function PackingView({
 
   const moreMenu = (
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn(ghostButton, "px-3")} aria-label="More packing actions">
+      <DropdownMenuTrigger className={cn(ghostButton, "min-w-11 shrink-0 justify-center px-3")} aria-label="More packing actions">
         <MoreHorizontal className="size-4" aria-hidden="true" />
         <span className="hidden sm:inline">More</span>
       </DropdownMenuTrigger>
@@ -223,9 +227,11 @@ export function PackingView({
         <DropdownMenuItem className={menuItem} onSelect={() => setStarterOpen(true)}>
           <ListChecks aria-hidden="true" /> Add from starter checklist…
         </DropdownMenuItem>
-        <DropdownMenuItem className={menuItem} onSelect={() => setCopyOpen(true)}>
-          <CopyPlus aria-hidden="true" /> Copy from another trip…
-        </DropdownMenuItem>
+        {isOwner ? (
+          <DropdownMenuItem className={menuItem} onSelect={() => setCopyOpen(true)}>
+            <CopyPlus aria-hidden="true" /> Copy from another trip…
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem className={menuItem} disabled={overall.packed === 0} onSelect={() => setResetOpen(true)}>
           <RotateCcw aria-hidden="true" /> Mark everything unpacked…
@@ -257,10 +263,12 @@ export function PackingView({
         </div>
         {categories.length > 0 ? (
           <div className="flex shrink-0 gap-2">
-            <button type="button" className={cn(addButton, "hidden lg:inline-flex")} onClick={() => setItemSheet({ open: true })}>
-              <Plus className="size-4" aria-hidden="true" /> Add item
-            </button>
-            {moreMenu}
+            {canEdit ? (
+              <button type="button" className={cn(addButton, "hidden lg:inline-flex")} onClick={() => setItemSheet({ open: true })}>
+                <Plus className="size-4" aria-hidden="true" /> Add item
+              </button>
+            ) : null}
+            {canEdit ? moreMenu : null}
           </div>
         ) : null}
       </div>
@@ -272,9 +280,11 @@ export function PackingView({
           onEmpty={() => setCategoryDialog({ open: true, first: true })}
           onStarter={() => setStarterOpen(true)}
           onCopy={() => setCopyOpen(true)}
+          canEdit={canEdit}
+          isOwner={isOwner}
         />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)_15rem]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)_15rem]">
           {/* Desktop category navigation */}
           <nav aria-label="Packing categories" className="hidden lg:block">
             <ul className="sticky top-4 space-y-1">
@@ -294,15 +304,17 @@ export function PackingView({
                   onSelect={() => setSelected(c.id)}
                 />
               ))}
-              <li className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCategoryDialog({ open: true })}
-                  className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
-                >
-                  <Plus className="size-4" aria-hidden="true" /> Add category
-                </button>
-              </li>
+              {canEdit ? (
+                <li className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryDialog({ open: true })}
+                    className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft/60"
+                  >
+                    <Plus className="size-4" aria-hidden="true" /> Add category
+                  </button>
+                </li>
+              ) : null}
             </ul>
           </nav>
 
@@ -345,7 +357,7 @@ export function PackingView({
                     aria-checked={show === value}
                     onClick={() => setShow(value)}
                     className={cn(
-                      "focus-ring flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors sm:flex-none",
+                      "focus-ring flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors sm:flex-none",
                       show === value ? "bg-white text-ink shadow-sm" : "text-muted-foreground hover:text-ink",
                     )}
                   >
@@ -422,8 +434,8 @@ export function PackingView({
       )}
 
       {/* Phone: always-reachable add button */}
-      {categories.length > 0 ? (
-        <div className="fixed inset-x-4 bottom-4 z-30 lg:hidden">
+      {categories.length > 0 && canEdit ? (
+        <div className="fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 md:bottom-4 lg:hidden">
           <button
             type="button"
             className={cn(addButton, "min-h-12 w-full")}
@@ -594,6 +606,7 @@ type Actions = {
   moveCategory: (category: PackingCategoryWithItems, direction: -1 | 1) => void;
   renameCategory: (category: PackingCategoryWithItems) => void;
   deleteCategory: (category: PackingCategoryWithItems) => void;
+  canEdit: boolean;
 };
 
 function CategorySection({
@@ -624,6 +637,7 @@ function CategorySection({
           {p.packed}/{p.total}
           <span className="sr-only"> packed</span>
         </span>
+        {actions.canEdit ? (
         <DropdownMenu>
           <DropdownMenuTrigger className={iconButton} aria-label={`Options for ${category.name}`}>
             <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -651,6 +665,7 @@ function CategorySection({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        ) : null}
       </div>
 
       {items.length > 0 ? (
@@ -664,7 +679,7 @@ function CategorySection({
           {category.items.length === 0 ? "No items yet." : filtered ? "Nothing here matches these filters." : null}
         </p>
       )}
-      <QuickAdd tripId={actions.tripId} category={category} />
+      {actions.canEdit ? <QuickAdd tripId={actions.tripId} category={category} /> : null}
     </section>
   );
 }
@@ -681,6 +696,7 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
         <input
           type="checkbox"
           checked={item.is_packed}
+          disabled={!actions.canEdit}
           onChange={(e) => actions.setPacked(item.id, e.target.checked)}
           aria-describedby={notesId}
           className="mt-0.5 size-5 shrink-0 cursor-pointer accent-moss-ink"
@@ -715,6 +731,7 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
           ) : null}
         </span>
       </label>
+      {actions.canEdit ? (
       <DropdownMenu>
         <DropdownMenuTrigger className={cn(iconButton, "mt-0.5")} aria-label={`Options for ${item.label}`}>
           <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -757,6 +774,7 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      ) : null}
     </li>
   );
 }
@@ -867,7 +885,7 @@ function StillToPack({
                   <button
                     type="button"
                     onClick={() => onShowRemaining(c.id)}
-                    className="focus-ring flex min-h-9 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm text-ink hover:bg-white/60"
+                    className="focus-ring flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm text-ink hover:bg-white/60"
                   >
                     <span className="truncate">{c.name}</span>
                     <span className="font-semibold tabular-nums">{n}</span>
@@ -914,7 +932,11 @@ function EmptyState({
   onEmpty,
   onStarter,
   onCopy,
+  canEdit,
+  isOwner,
 }: {
+  canEdit: boolean;
+  isOwner: boolean;
   copyAvailable: boolean;
   hasOtherTrips: boolean;
   onEmpty: () => void;
@@ -923,6 +945,15 @@ function EmptyState({
 }) {
   const option =
     "focus-ring flex h-full w-full flex-col items-start gap-2 rounded-2xl border border-border bg-white p-5 text-left transition-colors hover:border-moss hover:bg-moss-soft/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-white";
+  if (!canEdit) {
+    return (
+      <div className="card-surface px-5 py-8 text-center sm:px-8 sm:py-10">
+        <MascotImage size="md" decorative className="mx-auto" />
+        <h3 className="font-display mt-4 text-2xl font-semibold text-ink">No packing list yet</h3>
+        <p className="mt-2 text-muted-foreground">An editor on this trip can start one.</p>
+      </div>
+    );
+  }
   return (
     <div className="card-surface px-5 py-8 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-xl text-center">
@@ -938,6 +969,7 @@ function EmptyState({
             <span className="text-sm text-muted-foreground">Essentials, clothes, toiletries, baby, beach and electronics — pick what fits.</span>
           </button>
         </li>
+        {isOwner ? (
         <li>
           <button type="button" className={option} onClick={onCopy} disabled={!copyAvailable}>
             <CopyPlus className="size-5 text-moss-ink" aria-hidden="true" />
@@ -951,6 +983,7 @@ function EmptyState({
             </span>
           </button>
         </li>
+        ) : null}
         <li>
           <button type="button" className={option} onClick={onEmpty}>
             <Plus className="size-5 text-moss-ink" aria-hidden="true" />

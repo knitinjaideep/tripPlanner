@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Compass, Landmark, Loader2, Plus, UtensilsCrossed } from "lucide-react";
@@ -25,7 +27,7 @@ const VISIBLE = 6;
 const categoryFor = (p: ExplorePlace) => (p.kind === "food" ? "food" : "sightseeing");
 
 /** This trip's Explore places that aren't on the itinerary yet, with one-tap scheduling. */
-export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; dayLabel: string }) {
+function ExplorePanelInner({ places, dayLabel }: { places: ExplorePlace[]; dayLabel: string }) {
   const { tripId, selectedDate } = useItinerary();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -82,7 +84,7 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
                 disabled={busyId === p.id}
                 aria-busy={busyId === p.id}
                 aria-label={`Add ${p.name} to ${dayLabel}`}
-                className="focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft disabled:opacity-60"
+                className="focus-ring inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-moss-ink hover:bg-moss-soft disabled:opacity-60"
               >
                 {busyId === p.id ? (
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -132,7 +134,7 @@ export function ExplorePanel({ places, dayLabel }: { places: ExplorePlace[]; day
                     onClick={() => setRepeat(p)}
                     disabled={busyId === p.id}
                     aria-label={`Schedule ${p.name} again on ${dayLabel}`}
-                    className="focus-ring inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-ink hover:bg-secondary disabled:opacity-60"
+                    className="focus-ring inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-ink hover:bg-secondary disabled:opacity-60"
                   >
                     Add again
                   </button>
@@ -224,4 +226,10 @@ function RepeatDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+/** Editors and the owner only; viewers never see this control (the server refuses it regardless). */
+export function ExplorePanel(props: ComponentProps<typeof ExplorePanelInner>) {
+  const { canEdit } = useTripAccess();
+  return canEdit ? <ExplorePanelInner {...props} /> : null;
 }

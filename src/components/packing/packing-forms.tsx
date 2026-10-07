@@ -11,6 +11,7 @@ import {
   TextField,
   secondaryButtonClass,
 } from "@/components/forms/fields";
+import { ConflictGuard } from "@/components/forms/conflict";
 import { useFormAction } from "@/components/forms/use-form-action";
 import type { ActionState, PackingCategory, PackingItem } from "@/lib/types";
 
@@ -48,7 +49,8 @@ export function PackingItemForm({
     <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
       {item ? null : <input type="hidden" name="request_id" value={requestId} />}
       <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 sm:px-6">
-        <FormMessage message={state.ok ? undefined : state.message} signedOut={state.signedOut} />
+        <FormMessage message={state.ok || state.conflict ? undefined : state.message} signedOut={state.signedOut} />
+        <ConflictGuard state={state} expectedUpdatedAt={item?.updated_at} onDiscard={onCancel} />
         <TextField
           idPrefix="pi"
           name="label"

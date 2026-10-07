@@ -5,6 +5,17 @@ _Last updated: 2026-10-06 (Aruba Explore recommendations: curated collection, fa
 This file is the hand-off point for later prompts: what exists, how it is
 put together, and what comes next.
 
+## Shared trips + phone/iPad layouts (2026-10-07)
+
+- **Model:** one owner per trip (`trips.owner_id`, unchanged). Migration `0006_trip_sharing` (additive; applied only to a disposable local Postgres 17 — **not yet applied to Neon, run `npm run db:migrate`**): `trip_members` (editor/viewer; CHECK + composite FK keep the owner out and tied to the trip), `trip_invitations` (SHA-256 token hash, expiry, accepted/revoked, delivery state), `user_profiles` (display names from the verified session), `place_member_state` (private Explore heart + "Your notes"), `created_by`/`updated_by` on shared content filled by a trigger from `app.actor` (set per transaction by the DAL). Existing rows are back-filled to the owner; existing places' hearts/notes moved into the owner's private state.
+- **Access:** the DAL resolves the caller's role on THE trip (`resolveTripAccess`), then calls the existing owner-scoped queries with the trip's real owner (child rows carry it). Writes go through `runTripWrite` (role check inside the write transaction). No access → same "not found"; viewer write → `ForbiddenError`. Owner-only: trip settings/delete, invitations, members, "copy packing from another trip". Editors: all planning content. Viewers: read only (they may keep private Explore hearts/notes).
+- **Invitations:** `/invite/[token]` (no-store, noindex, no-referrer). Signed-out visitors keep the token in a 30-min first-party cookie; only `/invite` goes through sign-in, so the token never reaches the auth provider. Signing in never accepts; "Accept invitation" does (single transaction, row locked). Email-bound invitations require the provider-verified email (trim + lower-case only). Copied links are single-use, 7 days. Resend / "New link" replaces the token. Limits: 20 invitations/trip/hour, 60 s resend cooldown, 10 sends/invitation, 20 members, 30 open invitations.
+- **Email:** `src/lib/email/invitation-email.ts`, Resend over fetch, one provider. Needs `APP_ORIGIN`, `RESEND_API_KEY`, `INVITE_EMAIL_FROM` (optional `INVITE_EMAIL_DEV_INBOX`). Otherwise "Email delivery is not configured" and nothing is sent. "Sent" only when the provider accepts. The provider necessarily receives the email body (which holds the link). App request logs on the host may include the invite URL path.
+- **Collaboration:** open tabs poll `/api/trips/[id]/version` (opaque fingerprint, access-checked) every 20 s while visible, and on focus/online; `router.refresh()` keeps form state, and is deferred while a dialog/field is in use. Edit forms send `expected_updated_at`; a stale save returns a conflict, keeps the draft, and offers "Save my version anyway" / "Discard mine". Offline banner is honest.
+- **Files/uploads:** the app has no file storage (memories are album links, documents are links), so there are no upload/download endpoints to protect.
+- **Layout:** bottom nav (Overview, Itinerary, Bookings, Explore, More) below `md`, top tabs above; full-screen dialogs on phones; dynamic-viewport heights; 44 px targets; reorder has menu alternatives (arrows hidden on coarse pointers).
+- Checks: typecheck, lint, build, `db:check`; `test:authz` 119, new `test:sharing` 37, other suites pass. Responsive audit (temporary fixtures, since deleted) in headless Chromium and WebKit at 320×568, 390×844, 430×932, 600×900, 768×1024, 820×1180, 1180×820, 1440×900: no horizontal overflow; touch targets ≥ 44 px except desktop-only reorder arrows. Not tested: real Google sign-in, real email, physical devices.
+
 ## Aruba Explore recommendations (2026-10-06)
 
 A curated, version-controlled collection added to Explore on request — never
@@ -26,8 +37,19 @@ seeded, never written during build or render.
 - **Migration `0005_explore_recommendations`** (additive): `places.is_favorite`
   (bool, default false), `source_key`, `recommendation` jsonb (needs a
   source key), unique `(trip_id, source_key)`; `spa` added to place
-  categories. Applied to the Neon `production` branch 2026-10-06 (1 trip,
-  3 bookings, 48 itinerary entries, 0 places before and after).
+  categories. Applied 2026-10-06 to the database in `.env.local` — which is
+  the Neon branch named **`development`** (`ep-autumn-leaf-…`), not
+  `production` (`ep-silent-truth-…`, no Neon Auth). Earlier notes calling it
+  `production` were wrong. 1 trip, 3 bookings, 48 itinerary entries, 0
+  places before and after.
+- **Live (2026-10-06):** Vercel `trip-planner` → https://travel.nitinkotcherlakota.com
+  (also https://trip-planner-green-three.vercel.app), commit `989ce28`.
+  Production env vars `DATABASE_URL`, `NEON_AUTH_BASE_URL`,
+  `NEON_AUTH_COOKIE_SECRET` point at the `development` branch, and both
+  domains are Neon Auth trusted domains there. The `production` branch has
+  only Neon Auth's own tables (no app tables or data). Signed-out smoke test passes
+  (redirects to `/login` with `next`, auth proxy responds); not yet tested
+  signed in.
 - **Server:** `importExploreCollection` (trip row locked, one transaction,
   `ON CONFLICT DO NOTHING` on the unique key; refuses non-Aruba trips),
   `setPlaceFavorite` (set, not toggle), `updatePlaceNotes` — queries → DAL

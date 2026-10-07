@@ -20,7 +20,7 @@ export function TripTabs({ tripId }: { tripId: string }) {
   ];
 
   return (
-    <nav aria-label="Trip sections" className="border-b border-border">
+    <nav aria-label="Trip sections" className="hidden border-b border-border md:block">
       <ul className="relative -mb-px flex gap-1 overflow-x-auto [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden">
         {tabs.map(({ label, icon: Icon, href }) => {
           if (!href) {

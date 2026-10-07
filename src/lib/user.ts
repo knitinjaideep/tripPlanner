@@ -7,6 +7,8 @@ export type CurrentUser = {
   /** Stable Neon Auth user ID — the only value used for authorization. */
   id: string;
   email: string | null;
+  /** The sign-in provider's own statement that it verified this address. Never a browser-supplied value. */
+  emailVerified: boolean;
   displayName: string;
   firstName: string;
   avatarUrl: string | null;
@@ -63,6 +65,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   return {
     id: user.id,
     email,
+    emailVerified: email !== null && (user as { emailVerified?: unknown }).emailVerified === true,
     displayName: name,
     firstName: name.split(/\s+/)[0],
     avatarUrl: avatar,

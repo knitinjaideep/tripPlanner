@@ -298,7 +298,8 @@ async function main() {
     const files = walk("src").filter((f) => /\.(ts|tsx)$/.test(f));
     for (const file of files) {
       const src = readFileSync(file, "utf8");
-      const importsDb = /from "@\/db(\/queries)?"/.test(src);
+      // Type-only imports (row shapes) carry no database access.
+      const importsDb = /^(?!import type)[^\n]*from "@\/db(\/\w+)?"/m.test(src.replace(/^import type [^;]*;/gm, ""));
       if (importsDb) assert.ok(file.endsWith("src/lib/dal.ts"), `${file} imports the database layer directly`);
       if (/^["']use client["']/.test(src)) {
         assert.ok(!/@\/lib\/dal|@\/db|from "pg"/.test(src), `${file} is a Client Component importing server data code`);
@@ -312,7 +313,17 @@ async function main() {
     for (const block of blocks) {
       const name = /^export (?:async function|const) (\w+)/.exec(block)![1];
       if (name === "requireUser") continue;
-      assert.match(block, /await require(User|UserId)\(\)/, `${name} must verify the session`);
+      // Directly, or through a trip-access helper (checked below to verify the session and resolve the role).
+      assert.match(
+        block,
+        /await require(User|UserId)\(\)|await getCurrentUser\(\)|\b(readTrip|editTrip|ownTrip|withTripWrite)\(/,
+        `${name} must verify the session`,
+      );
+    }
+    for (const helper of ["readTrip", "withTripWrite"]) {
+      const body = src.slice(src.indexOf(`async function ${helper}`), src.indexOf("\n}\n", src.indexOf(`async function ${helper}`)));
+      assert.match(body, /await require(User|UserId)\(\)/, `${helper} must verify the session`);
+      assert.match(body, /resolveTripAccess|accessFor|runTripWrite/, `${helper} must resolve the caller's role on the trip`);
     }
   });
   await check("no NEXT_PUBLIC_ secrets and no route exposes SQL", () => {
@@ -322,7 +333,7 @@ async function main() {
       assert.ok(!/NEXT_PUBLIC_(DATABASE|NEON_AUTH)/.test(src), `${file} exposes a server secret`);
     }
     const routes = files.filter((f) => /\/route\.ts$/.test(f));
-    assert.deepEqual(routes, ["src/app/api/auth/[...path]/route.ts"]);
+    assert.deepEqual(routes, ["src/app/api/auth/[...path]/route.ts", "src/app/api/trips/[tripId]/version/route.ts", "src/app/invite/route.ts"]);
   });
 }
 
@@ -1690,7 +1701,7 @@ async function collectionChecks() {
     const rows = await list(A, t);
     assert.equal(rows.length, 17, "no duplicates");
     const b = rows.find((p) => p.id === butterfly.id)!;
-    assert.deepEqual([b.is_favorite, b.planning_notes], [true, "Bring the carrier"]);
+    assert.deepEqual([b.is_favorite, b.my_notes], [true, "Bring the carrier"]); // private "Your notes" (place_member_state)
     const e = rows.find((p) => p.id === eagle.id)!;
     assert.deepEqual([e.name, e.priority, e.planning_notes, e.visited, e.completed_count], ["Eagle Beach (fofoti trees)", "maybe", "Our photo spot", true, 1]);
     const items = (await q.listItinerary(db, A, t))!;
@@ -1707,7 +1718,7 @@ async function collectionChecks() {
     assert.ok(result.ok && result.summary.refreshed === 1 && result.summary.added === 0);
     const after = await bySource(t, "aruba-butterfly-farm");
     assert.equal(after.recommendation?.summary, C.items[0].recommendation.summary);
-    assert.deepEqual([after.is_favorite, after.planning_notes], [true, "Bring the carrier"]);
+    assert.deepEqual([after.is_favorite, after.my_notes], [true, "Bring the carrier"]);
   });
   await check("adding to the itinerary links the right Explore record, in America/Aruba wall-clock time", async () => {
     const zoia = await bySource(t, "aruba-hyatt-zoia-spa");

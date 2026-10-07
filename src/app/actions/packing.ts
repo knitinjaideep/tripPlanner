@@ -19,6 +19,7 @@ import {
 } from "@/lib/dal";
 import {
   deletePackingCategorySchema,
+  expectedUpdatedAtSchema,
   formFields,
   packingCategorySchema,
   packingCopySchema,
@@ -28,7 +29,7 @@ import {
   requestIdSchema,
 } from "@/lib/validation";
 import type { ActionState } from "@/lib/types";
-import { guarded, invalid, notFound } from "./shared";
+import { conflictState, guarded, invalid, notFound } from "./shared";
 
 const ITEM_FIELDS = ["category_id", "label", "quantity", "traveler_name", "notes"] as const;
 
@@ -132,9 +133,15 @@ export async function savePackingItem(
 
   const result = await guarded(itemId ? "updatePackingItem" : "createPackingItem", async () => {
     const outcome = itemId
-      ? await updatePackingItemForUser(tripId, itemId, parsed.data)
+      ? await updatePackingItemForUser(
+          tripId,
+          itemId,
+          parsed.data,
+          expectedUpdatedAtSchema.parse(formData.get("expected_updated_at") ?? undefined),
+        )
       : await createPackingItemForUser(tripId, parsed.data, requestId.success ? requestId.data : undefined);
     if (outcome.ok) return { ok: true, message: itemId ? "Item updated." : `Added “${parsed.data.label}”.` };
+    if (outcome.reason === "conflict" && itemId) return conflictState(tripId, "packing", itemId, "item");
     if (outcome.reason === "category_not_in_trip") {
       return {
         ok: false,

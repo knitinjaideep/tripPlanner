@@ -4,14 +4,15 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { updateTrip } from "@/app/actions/trips";
 import { TripForm } from "@/components/forms/trip-form";
-import { getTripForUser } from "@/lib/dal";
+import { getTripForUser, getTripRoleForUser } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Edit trip" };
 
 export default async function EditTripPage({ params }: PageProps<"/trips/[tripId]/edit">) {
   const { tripId } = await params;
-  const trip = await getTripForUser(tripId);
-  if (!trip) notFound();
+  const [trip, access] = await Promise.all([getTripForUser(tripId), getTripRoleForUser(tripId)]);
+  // Trip settings are the owner's. (The server action refuses anyone else too.)
+  if (!trip || access?.role !== "owner") notFound();
 
   return (
     <main className="mx-auto max-w-3xl px-4 pt-6 pb-16 sm:px-6 sm:pt-10">

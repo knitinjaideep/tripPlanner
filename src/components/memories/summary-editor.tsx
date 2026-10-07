@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { saveTripSummary } from "@/app/actions/memories";
@@ -13,7 +15,7 @@ import { EditDialog, useDirty } from "./edit-dialog";
 type Summary = Pick<TripMemory, "overall_rating" | "summary" | "favorite_moment" | "would_return" | "lessons_for_next_time">;
 
 /** Opens the trip reflection editor. The album link is edited on its own card. */
-export function SummaryEditButton({
+function SummaryEditButtonInner({
   tripId,
   memory,
   children,
@@ -182,4 +184,10 @@ function WouldReturnField({
       {error ? <p className="mt-1 text-sm text-destructive">{error[0]}</p> : null}
     </fieldset>
   );
+}
+
+/** Editors and the owner only; viewers never see this control (the server refuses it regardless). */
+export function SummaryEditButton(props: ComponentProps<typeof SummaryEditButtonInner>) {
+  const { canEdit } = useTripAccess();
+  return canEdit ? <SummaryEditButtonInner {...props} /> : null;
 }

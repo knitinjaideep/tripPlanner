@@ -11,6 +11,7 @@ import {
 import { documentHost, documentSource } from "@/lib/documents";
 import type { TripDocument } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useTripAccess } from "./trip-access";
 import { useTripWorkspace } from "./trip-workspace";
 
 export function DocumentIcon({ url, className }: { url: string; className?: string }) {
@@ -30,6 +31,7 @@ const SOURCE_LABEL = { drive: "Google Drive", docs: "Google Docs", sheets: "Goog
 
 export function DocumentRow({ doc, context }: { doc: TripDocument; context?: string | null }) {
   const { editDocument, removeDocument } = useTripWorkspace();
+  const { canEdit } = useTripAccess();
   const source = documentSource(doc.url);
   const sub = [source === "other" ? documentHost(doc.url) : SOURCE_LABEL[source], context].filter(Boolean).join(" · ");
 
@@ -49,6 +51,7 @@ export function DocumentRow({ doc, context }: { doc: TripDocument; context?: str
         <ExternalLink className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="sr-only">(opens in a new tab)</span>
       </a>
+      {canEdit ? (
       <DropdownMenu>
         <DropdownMenuTrigger
           className="focus-ring mr-1 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-ink"
@@ -65,6 +68,7 @@ export function DocumentRow({ doc, context }: { doc: TripDocument; context?: str
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      ) : null}
     </li>
   );
 }

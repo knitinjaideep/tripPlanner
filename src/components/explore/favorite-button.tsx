@@ -42,7 +42,7 @@ export function FavoriteButton({
     });
   };
 
-  const label = value ? `Remove ${placeName} from favorites` : `Save ${placeName} to favorites`;
+  const label = value ? `Remove ${placeName} from your favorites` : `Save ${placeName} to your favorites (private)`;
   return (
     <button
       type="button"

@@ -9,6 +9,7 @@ import { SelectField, secondaryButtonClass } from "@/components/forms/fields";
 import { ConfirmDialog } from "@/components/trip/confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { itineraryHref } from "@/lib/itinerary-format";
 import { entryTitle } from "@/lib/schedule";
 import type { ItineraryEntry, Reservation } from "@/lib/types";
@@ -274,6 +275,8 @@ export function AddActivityButton({
   children: ReactNode;
 }) {
   const { addActivity } = useItinerary();
+  const { canEdit } = useTripAccess();
+  if (!canEdit) return null;
   return (
     <button type="button" onClick={() => addActivity(mode)} className={className}>
       {children}

@@ -97,7 +97,7 @@ export function DayStrip({
               const value = e.target.value;
               if (days.some((d) => d.date === value)) router.push(itineraryHref(tripId, value, showCancelled), { scroll: false });
             }}
-            className="focus-ring h-10 rounded-[10px] border border-input bg-white px-3 text-sm text-ink"
+            className="focus-ring h-11 rounded-[10px] border border-input bg-white px-3 text-sm text-ink"
           />
         </label>
       ) : null}

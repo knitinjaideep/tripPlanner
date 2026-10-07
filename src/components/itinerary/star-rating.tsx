@@ -35,7 +35,7 @@ export function StarRatingInput({
               onChange={() => setRating(n)}
               className="peer sr-only"
             />
-            <span className="grid size-10 place-items-center rounded-lg peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
+            <span className="grid size-11 place-items-center rounded-lg peer-focus-visible:ring-3 peer-focus-visible:ring-moss/40">
               <Star className={cn("size-6", n <= rating ? "fill-gold text-gold-deep" : "text-input")} aria-hidden="true" />
               <span className="sr-only">{n === 1 ? "1 star" : `${n} stars`}</span>
             </span>
@@ -46,7 +46,7 @@ export function StarRatingInput({
         <button
           type="button"
           onClick={() => setRating(0)}
-          className="focus-ring min-h-10 rounded-lg px-2 text-sm font-medium text-muted-foreground hover:text-ink"
+          className="focus-ring min-h-11 rounded-lg px-2 text-sm font-medium text-muted-foreground hover:text-ink"
         >
           Clear<span className="sr-only"> rating</span>
         </button>

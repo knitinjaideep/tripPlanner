@@ -43,7 +43,7 @@ export function Logo({ href = "/trips", className }: { href?: string; className?
   return (
     <Link
       href={href}
-      className={cn("focus-ring inline-flex items-center gap-2.5 rounded-lg text-ink", className)}
+      className={cn("focus-ring inline-flex min-h-11 items-center gap-2.5 rounded-lg text-ink", className)}
       aria-label="Atlas home"
     >
       <LogoMark />

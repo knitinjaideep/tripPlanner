@@ -48,6 +48,7 @@ import { agendaCategory, agendaTitle, type AgendaEntry, type OverlapDetail } fro
 import type { ActionState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CATEGORY_STYLE, CategoryIcon } from "./category-icon";
+import { useTripAccess } from "@/components/trip/trip-access";
 import { useItinerary } from "./itinerary-workspace";
 import { StarRatingInput, Stars } from "./star-rating";
 
@@ -71,6 +72,7 @@ const menuItem = "min-h-11 rounded-lg";
 export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
   const { tripId, moveEntry, removeEntry, editEntry } = useItinerary();
   const { viewBooking, editBooking } = useTripWorkspace();
+  const { canEdit } = useTripAccess();
   const [pending, startTransition] = useTransition();
   const [reflecting, setReflecting] = useState(false);
   // Set when a booking gets its itinerary row during this session (before the refresh lands).
@@ -130,7 +132,7 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
       }
     });
 
-  const statusButton = canReview ? (
+  const statusButton = canReview && canEdit ? (
     <button
       type="button"
       onClick={() => setStatus(status === "completed" ? "planned" : "completed")}
@@ -158,7 +160,21 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
     </button>
   ) : null;
 
-  const menu = (
+  // Viewers can read everything but change nothing: only "View booking" remains for a booking.
+  const viewerMenu = reservation ? (
+    <button
+      type="button"
+      onClick={() => viewBooking(reservation.id)}
+      aria-label={`View booking for ${title}`}
+      className="focus-ring grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-ink"
+    >
+      <Ticket className="size-4" aria-hidden="true" />
+    </button>
+  ) : null;
+
+  const menu = !canEdit ? (
+    viewerMenu
+  ) : (
     <DropdownMenu>
       <DropdownMenuTrigger
         className="focus-ring grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-ink"
@@ -207,6 +223,24 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
             >
               <Pencil aria-hidden="true" /> Edit
             </DropdownMenuItem>
+            {reorder ? (
+              <>
+                <DropdownMenuItem
+                  className={menuItem}
+                  disabled={!reorder.canUp || reorder.pending}
+                  onSelect={() => reorder.onMove(-1)}
+                >
+                  <ArrowUp aria-hidden="true" /> Move up
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className={menuItem}
+                  disabled={!reorder.canDown || reorder.pending}
+                  onSelect={() => reorder.onMove(1)}
+                >
+                  <ArrowDown aria-hidden="true" /> Move down
+                </DropdownMenuItem>
+              </>
+            ) : null}
             <DropdownMenuItem className={menuItem} onSelect={() => moveEntry(item)}>
               <CalendarArrowUp aria-hidden="true" /> Move to another day
             </DropdownMenuItem>
@@ -290,7 +324,7 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
 
           {item?.planning_notes && !isEnd ? (
             <details className="group mt-2 text-sm">
-              <summary className="focus-ring -ml-1 flex min-h-9 cursor-pointer list-none items-start gap-1.5 rounded px-1 py-1 text-ink/80 [&::-webkit-details-marker]:hidden">
+              <summary className="focus-ring -ml-1 flex min-h-11 cursor-pointer list-none items-start gap-1.5 rounded px-1 py-1 text-ink/80 [&::-webkit-details-marker]:hidden">
                 <StickyNote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="min-w-0 flex-1 line-clamp-1 whitespace-pre-line group-open:line-clamp-none">
                   {item.planning_notes}
@@ -308,7 +342,7 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
               href={placeMapsUrl(item.place)}
               target="_blank"
               rel="noopener noreferrer"
-              className="focus-ring mt-1 -ml-1 inline-flex min-h-9 items-center gap-1.5 rounded px-1 text-sm font-semibold text-moss-ink hover:underline"
+              className="focus-ring mt-1 -ml-1 inline-flex min-h-11 items-center gap-1.5 rounded px-1 text-sm font-semibold text-moss-ink hover:underline"
             >
               Map <ExternalLink className="size-3.5" aria-hidden="true" />
               <span className="sr-only">for {item.place.name} (opens in a new tab)</span>
@@ -335,8 +369,8 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
           {hasReview && !reflecting && item ? <ReviewSummary rating={item.rating} reflection={item.reflection} /> : null}
         </div>
         <div className="-mt-1.5 -mr-1.5 flex shrink-0 items-center">
-          {reorder ? (
-            <div className="mr-0.5 flex flex-col">
+          {reorder && canEdit ? (
+            <div className="mr-0.5 flex flex-col pointer-coarse:hidden">
               <ReorderButton direction={-1} entryKey={entry.key} title={title} controls={reorder} />
               <ReorderButton direction={1} entryKey={entry.key} title={title} controls={reorder} />
             </div>
@@ -359,17 +393,17 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
         />
       ) : null}
 
-      {variant === "outside" ? (
+      {variant === "outside" && canEdit ? (
         <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
           {ownPlan && item ? (
-            <button type="button" onClick={() => moveEntry(item)} className={cn(secondaryButtonClass, "min-h-10 px-4 text-sm")}>
+            <button type="button" onClick={() => moveEntry(item)} className={cn(secondaryButtonClass, "min-h-11 px-4 text-sm")}>
               <CalendarArrowUp className="size-4" aria-hidden="true" /> Move to a trip day
             </button>
           ) : reservation ? (
             <button
               type="button"
               onClick={() => editBooking(reservation.id)}
-              className={cn(secondaryButtonClass, "min-h-10 px-4 text-sm")}
+              className={cn(secondaryButtonClass, "min-h-11 px-4 text-sm")}
             >
               <Pencil className="size-4" aria-hidden="true" /> Edit booking dates
             </button>
@@ -500,10 +534,10 @@ function ReflectionPanel({
         A trip favorite
       </label>
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-10 px-4 text-sm")}>
+        <button type="button" onClick={onDone} className={cn(secondaryButtonClass, "min-h-11 px-4 text-sm")}>
           Not now
         </button>
-        <SubmitButton pending={pending} pendingLabel="Saving…" className="min-h-10 px-4 text-sm">
+        <SubmitButton pending={pending} pendingLabel="Saving…" className="min-h-11 px-4 text-sm">
           Save reflection
         </SubmitButton>
       </div>
