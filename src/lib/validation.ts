@@ -1,3 +1,4 @@
+import { BABY_ITEMS } from "@/lib/baby-packing";
 import { z } from "zod";
 import { parseEmail } from "@/lib/sharing";
 import { RESERVATION_KINDS, RESERVATION_STATUSES, type ReservationKind } from "@/lib/types";
@@ -5,6 +6,23 @@ import { COVER_KEYS } from "@/lib/cover-keys";
 import { DETAIL_FIELDS } from "@/lib/reservation-details";
 import { isValidTimeZone } from "@/lib/time-zones";
 import { STARTER_KEYS } from "@/lib/packing";
+import { POLL_LIMITS } from "@/lib/polls";
+import {
+  BACKGROUND_IDS,
+  CLOCKS,
+  CURRENCY_CODES,
+  DENSITIES,
+  DIETS,
+  DIET_NOTE_MAX,
+  DISPLAY_NAME_MAX,
+  DISTANCE_UNITS,
+  INTENSITIES,
+  INTERESTS,
+  MASCOT_MODES,
+  NOTIFICATION_GROUPS,
+  PACES,
+  TRANSPORTS,
+} from "@/lib/settings";
 import {
   ITINERARY_CATEGORIES,
   ITINERARY_STATUSES,
@@ -328,7 +346,16 @@ export const packingItemSchema = z.object({
     .refine((n) => n >= 1 && n <= 999, { message: "Quantity must be between 1 and 999." }),
   traveler_name: optionalText("Traveler", 40),
   notes: optionalText("Notes", 1000),
-});
+  /** A current member of the trip (checked again against the database on save), or blank for nobody. */
+  assignee_id: z
+    .string()
+    .trim()
+    .max(255)
+    .transform((v) => v || null)
+    .optional(),
+  due_date: optionalDate.optional(),
+  due_time: optionalTime.optional(),
+}).refine((v) => !v.due_time || v.due_date, { path: ["due_time"], message: "Choose a due date first." });
 
 /** What to do with a packing category's items when deleting it. */
 export const deletePackingCategorySchema = z.discriminatedUnion("items", [
@@ -344,6 +371,12 @@ export const packingOrderSchema = z.array(z.uuid()).min(1).max(500);
 export const packingStarterSchema = z
   .array(z.enum(STARTER_KEYS), { error: "Choose at least one category." })
   .min(1, "Choose at least one category.");
+
+const BABY_KEYS = new Set(BABY_ITEMS.map((i) => i.key));
+
+/** Arjun's list import: only keys of the built-in list are accepted; the server re-plans from the database. */
+const babyKeys = z.array(z.string().max(120)).max(200).refine((keys) => keys.every((k) => BABY_KEYS.has(k)), "Unknown item.");
+export const babyImportSchema = z.object({ quantities: babyKeys, addAnyway: babyKeys });
 
 /** Copy from another trip: all of its categories, or the chosen ones. */
 export const packingCopySchema = z.object({
@@ -451,3 +484,131 @@ export const expectedUpdatedAtSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z)?$/)
   .optional()
   .catch(undefined);
+
+/* ------------------------------- polls ------------------------------- */
+
+const pollText = (label: string, max: number, min = 1) =>
+  z
+    .string()
+    .trim()
+    .min(min, `${label} is required.`)
+    .max(max, `${label} must be ${max} characters or fewer.`);
+
+/** "Ask the group". Linked ids are checked against the trip on the server; the deadline is wall-clock in the TRIP's zone. */
+export const pollInputSchema = z.object({
+  question: pollText("The question", POLL_LIMITS.question, POLL_LIMITS.questionMin),
+  description: z
+    .string()
+    .trim()
+    .max(POLL_LIMITS.description, `The description must be ${POLL_LIMITS.description} characters or fewer.`)
+    .nullable()
+    .transform((v) => v || null),
+  options: z
+    .array(
+      z.object({
+        label: z.string().trim().max(POLL_LIMITS.option, `Each option must be ${POLL_LIMITS.option} characters or fewer.`),
+        place_id: idSchema.nullable(),
+      }),
+    )
+    .min(POLL_LIMITS.minOptions, "Add at least two options.")
+    .max(POLL_LIMITS.maxOptions, "Three options at most.")
+    .refine((opts) => opts.every((o) => o.label || o.place_id), "Every option needs some text or a saved place."),
+  any_option: z.boolean(),
+  closes: z
+    .object({
+      date: z.iso.date({ error: "Enter a valid closing date." }),
+      time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid closing time."),
+    })
+    .nullable(),
+  parent: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("trip") }),
+    z.object({ type: z.literal("day"), day: z.iso.date() }),
+    z.object({ type: z.literal("activity"), item_id: idSchema }),
+    z.object({ type: z.literal("place"), place_id: idSchema }),
+  ]),
+  participant_ids: z.array(z.string().min(1).max(255)).max(30).nullable(),
+  replaces_poll_id: idSchema.nullable(),
+});
+
+
+/* ------------------------------- reminders ------------------------------- */
+
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 09:00.");
+
+export const reminderRuleSchema = z.object({
+  preset: z.enum(["24h", "2h", "at_due", "1d_before", "custom", "off"]),
+  recipient_ids: z.array(z.string().min(1).max(255)).max(20),
+  custom_amount: z.number().int().min(0).max(43200).optional(),
+  custom_unit: z.enum(["minutes", "hours", "days"]).optional(),
+  custom_days: z.number().int().min(0).max(30).optional(),
+  local_time: clockTime.nullable().optional(),
+});
+
+export const reminderTargetSchema = z.object({ subject: z.enum(["booking", "task"]), id: idSchema });
+
+export const reminderPrefsSchema = z.object({
+  enabled: z.boolean(),
+  in_app: z.boolean(),
+  email: z.boolean(),
+  quiet_enabled: z.boolean(),
+  quiet_start: clockTime,
+  quiet_end: clockTime,
+  quiet_zone: z.string().max(64).nullable(),
+  default_task_time: clockTime,
+});
+
+/** A snooze is an absolute instant (epoch ms) the browser worked out from what the person picked. */
+export const snoozeSchema = z.object({ atMs: z.number().int().positive().max(8_640_000_000_000_000) });
+
+
+/* -------------------------------- settings -------------------------------- */
+
+/** Every section schema is strict (unknown keys are refused) and partial: only the fields sent are changed. */
+const atLeastOne = (o: object) => Object.keys(o).length > 0;
+const NOTHING = { error: "Nothing to save." };
+
+export const appearanceSettingsSchema = z
+  .strictObject({
+    background: z.enum(BACKGROUND_IDS, { error: "Choose one of the backgrounds." }),
+    intensity: z.enum(INTENSITIES),
+    density: z.enum(DENSITIES),
+    mascot: z.enum(MASCOT_MODES),
+  })
+  .partial()
+  .refine(atLeastOne, NOTHING);
+
+export const notificationSettingsSchema = z
+  .strictObject(Object.fromEntries(NOTIFICATION_GROUPS.map((g) => [g, z.boolean()])) as Record<(typeof NOTIFICATION_GROUPS)[number], z.ZodBoolean>)
+  .partial()
+  .refine(atLeastOne, NOTHING);
+
+export const travelSettingsSchema = z
+  .strictObject({
+    diet: z.enum(DIETS).nullable(),
+    diet_note: z
+      .string()
+      .max(DIET_NOTE_MAX * 2, `Keep the note to ${DIET_NOTE_MAX} characters or fewer.`)
+      .transform((v) => v.replace(/[\u0000-\u001f\u007f]/g, " ").trim())
+      .pipe(z.string().max(DIET_NOTE_MAX, `Keep the note to ${DIET_NOTE_MAX} characters or fewer.`)),
+    interests: z.array(z.enum(INTERESTS)).max(INTERESTS.length).transform((v) => [...new Set(v)]),
+    pace: z.enum(PACES).nullable(),
+    transport: z.array(z.enum(TRANSPORTS)).max(TRANSPORTS.length).transform((v) => [...new Set(v)]),
+  })
+  .partial()
+  .refine(atLeastOne, NOTHING);
+
+export const displaySettingsSchema = z
+  .strictObject({
+    clock: z.enum(CLOCKS),
+    distance: z.enum(DISTANCE_UNITS),
+    currency: z.enum(CURRENCY_CODES),
+  })
+  .partial()
+  .refine(atLeastOne, NOTHING);
+
+/** Blank = go back to the name from the Google account. */
+export const displayNameSchema = z
+  .string()
+  .transform((v) => v.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim())
+  .pipe(z.string().max(DISPLAY_NAME_MAX, `Use ${DISPLAY_NAME_MAX} characters or fewer.`))
+  .transform((v) => v || null);

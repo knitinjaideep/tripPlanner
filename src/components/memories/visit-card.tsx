@@ -13,6 +13,7 @@ import { StarRatingInput, Stars } from "@/components/itinerary/star-rating";
 import { ViewBookingButton } from "@/components/trip/trip-workspace";
 import { exploreHref } from "@/lib/explore";
 import { entryClock, itineraryHref } from "@/lib/itinerary-format";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import { LABELS, type PlaceCategory } from "@/lib/plan-options";
 import { entryTitle, itemSchedule } from "@/lib/schedule";
 import type { ActionState, ItineraryEntry } from "@/lib/types";
@@ -28,9 +29,10 @@ const linkClass =
  * Itinerary and Explore immediately (and vice versa).
  */
 export function VisitCard({ tripId, visit, inTrip }: { tripId: string; visit: ItineraryEntry; inTrip: boolean }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const title = entryTitle(visit);
   const schedule = itemSchedule(visit);
-  const clock = schedule.date ? entryClock({ date: schedule.date, time: schedule.startTime, timeZone: schedule.timeZone }) : null;
+  const clock = schedule.date ? entryClock({ date: schedule.date, time: schedule.startTime, timeZone: schedule.timeZone }, clockPref) : null;
   const { canEdit } = useTripAccess();
   const [editing, setEditing] = useState(false);
   const [session, setSession] = useState(0);

@@ -32,6 +32,13 @@ First-time Neon + Google sign-in setup: **[docs/local-setup.md](docs/local-setup
 | `npm run db:generate` | Generate a migration from `src/db/schema.ts` (review the SQL!) |
 | `npm run db:migrate` | Apply migrations in `drizzle/` |
 | `npm run db:check` | Check migration files are consistent |
+| `npm run test:reminders` | Booking / task reminder checks (recipients, zones, quiet hours, races, retries, snooze, authorization) against a disposable DB (`TEST_DATABASE_URL`) |
+| `npm run test:reminder-logic` | Reminder presets, time zones, quiet hours, freshness, snooze limits and wording (no DB; also run with `TZ=Pacific/Kiritimati`) |
+| `npm run test:evening` | Evening preview schedule, delivery and email checks against a disposable DB |
+| `npm run evening:dry-run` | Operator dry run of one person's preview (read-only) |
+| `npm run test:polls` | "Ask the group" poll checks against a disposable DB (`TEST_DATABASE_URL`) |
+| `npm run test:notifications` | Notification inbox checks against a disposable DB (`TEST_DATABASE_URL`) |
+| `npm run test:notification-format` | Notification destinations, text, grouping (no DB) |
 | `npm run test:authz` | Ownership/authorization checks against a disposable DB (`TEST_DATABASE_URL`) |
 | `npm run test:itinerary` | Pure itinerary logic checks (dates, zones, de-duplication) — no DB |
 | `npm run test:explore` | Pure Explore checks (URL filters, visit states, duplicate hints, maps links) — no DB |

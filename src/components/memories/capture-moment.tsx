@@ -18,6 +18,7 @@ import { useFormAction } from "@/components/forms/use-form-action";
 import { StarRatingInput } from "@/components/itinerary/star-rating";
 import type { TripDayOption } from "@/components/itinerary/types";
 import { formatTime } from "@/lib/dates";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import type { CaptureCandidate } from "@/lib/memories";
 import { ITINERARY_CATEGORIES, LABELS, exploreKindFor, type ItineraryCategory } from "@/lib/plan-options";
 import type { ActionState } from "@/lib/types";
@@ -218,6 +219,7 @@ function Buttons({ pending, onCancel }: { pending: boolean; onCancel: () => void
 }
 
 function ExistingForm({ tripId, candidates, days, onDirty, onPending, onDone, onCancel }: FormProps & { candidates: CaptureCandidate[] }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const [key, setKey] = useState("");
   const chosen = candidates.find((c) => c.key === key);
   const { state, onSubmit, pending } = useFormAction(async (prev: ActionState, formData: FormData) => {
@@ -257,7 +259,7 @@ function ExistingForm({ tripId, candidates, days, onDirty, onPending, onDone, on
             <optgroup key={date} label={dayLabel(date)}>
               {list.map((c) => (
                 <option key={c.key} value={c.key}>
-                  {c.time ? `${formatTime(c.time)} · ` : ""}
+                  {c.time ? `${formatTime(c.time, clockPref)} · ` : ""}
                   {c.title}
                 </option>
               ))}

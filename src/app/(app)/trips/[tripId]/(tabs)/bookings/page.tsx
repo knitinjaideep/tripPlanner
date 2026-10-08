@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FileText, Plus } from "lucide-react";
+import { ReminderReviewButton } from "@/components/reminders/reminders-provider";
 import { BookingSummaryRow } from "@/components/trip/overview-cards";
 import { DocumentRow } from "@/components/trip/document-row";
 import { AddBookingButton, AddDocumentButton } from "@/components/trip/trip-workspace";
@@ -44,9 +45,12 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
                 : `${trip.reservations.length} ${trip.reservations.length === 1 ? "reservation" : "reservations"}, in order. Times are local.`}
             </p>
           </div>
-          <AddBookingButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-moss-hover">
-            <Plus className="size-4" aria-hidden="true" /> Add booking
-          </AddBookingButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <ReminderReviewButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-4 text-[0.9375rem] font-semibold text-ink hover:bg-secondary" />
+            <AddBookingButton className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-moss-ink px-5 text-[0.9375rem] font-semibold text-white hover:bg-moss-hover">
+              <Plus className="size-4" aria-hidden="true" /> Add booking
+            </AddBookingButton>
+          </div>
         </div>
 
         {groups.length === 0 ? (
@@ -89,7 +93,7 @@ export default async function TripBookingsPage({ params }: PageProps<"/trips/[tr
       </section>
 
       <aside id="documents" aria-labelledby="documents-heading" className="scroll-mt-24 lg:col-span-4">
-        <div className="rounded-2xl bg-surface-warm p-5 sm:p-6 lg:sticky lg:top-24">
+        <div className="rounded-2xl bg-surface-warm p-5 sm:p-6 lg:sticky lg:top-[calc(6rem+var(--atlas-bar-h,0px))]">
           <div className="flex items-center justify-between gap-3">
             <h2 id="documents-heading" className="eyebrow flex items-center gap-2 text-earth-ink">
               <FileText className="size-4" aria-hidden="true" /> All documents

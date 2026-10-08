@@ -157,7 +157,9 @@ export type ItineraryItemInput = Pick<
 export type VisitReviewInput = Pick<ItineraryItem, "status" | "rating" | "reflection" | "is_favorite">;
 
 export type PackingCategoryInput = Pick<PackingCategory, "name">;
-export type PackingItemInput = Pick<PackingItem, "category_id" | "label" | "quantity" | "traveler_name" | "notes">;
+export type PackingItemInput = Pick<PackingItem, "category_id" | "label" | "quantity" | "traveler_name" | "notes"> &
+  // Assignment and deadline are optional on every write path; the zone is filled in by the data layer.
+  Partial<Pick<PackingItem, "assignee_id" | "due_date" | "due_time">>;
 
 export type TripMemoryInput = Pick<
   TripMemory,

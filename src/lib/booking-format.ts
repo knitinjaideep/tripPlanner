@@ -1,18 +1,19 @@
 import { formatDayDate, formatShortDay, formatTime, nightsBetween } from "@/lib/dates";
 import { zoneAbbreviation } from "@/lib/time-zones";
+import type { Clock } from "@/lib/settings";
 import type { Reservation } from "@/lib/types";
 
 /** "8:20 AM EDT" — the stored wall-clock time, labelled with its zone. */
-export function formatZonedTime(date: string, time: string, timeZone: string | null) {
+export function formatZonedTime(date: string, time: string, timeZone: string | null, clock: Clock = "12h") {
   const zone = timeZone ? zoneAbbreviation(date, time, timeZone) : null;
-  return zone ? `${formatTime(time)} ${zone}` : formatTime(time);
+  return zone ? `${formatTime(time, clock)} ${zone}` : formatTime(time, clock);
 }
 
 /** "Wed, Oct 14, 2026 · 8:20 AM EDT" — or just the date / nothing. */
-export function formatMoment(date: string | null, time: string | null, short = false, timeZone: string | null = null) {
+export function formatMoment(date: string | null, time: string | null, short = false, timeZone: string | null = null, clock: Clock = "12h") {
   if (!date) return null;
   const day = short ? formatShortDay(date) : formatDayDate(date);
-  return time ? `${day} · ${formatZonedTime(date, time, timeZone)}` : day;
+  return time ? `${day} · ${formatZonedTime(date, time, timeZone, clock)}` : day;
 }
 
 /** One-line place summary: "EWR → AUA" or the location. */

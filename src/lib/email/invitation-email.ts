@@ -105,13 +105,19 @@ export type MailTransport = (message: {
   text: string;
   html: string;
   apiKey: string;
+  /** Sent as the provider's Idempotency-Key so a retried request is not delivered twice (best effort: the provider's window applies). */
+  idempotencyKey?: string;
 }) => Promise<{ accepted: boolean }>;
 
 /** Resend over HTTPS. Credentials stay on the server; the response body is never logged. */
-export const resendTransport: MailTransport = async ({ apiKey, from, to, subject, text, html }) => {
+export const resendTransport: MailTransport = async ({ apiKey, from, to, subject, text, html, idempotencyKey }) => {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
     body: JSON.stringify({ from, to: [to], subject, text, html }),
     signal: AbortSignal.timeout(10_000),
     cache: "no-store",

@@ -26,13 +26,14 @@ export const ROLE_DESCRIPTIONS: Record<TripRole, string> = {
 export type Capability =
   | "read" //          see every part of the trip
   | "contribute" //    itinerary, Explore, bookings, packing, memories
+  | "participate" //   answer a poll — the only thing a viewer may write; changes nothing else on the trip
   | "manage_trip" //   edit trip settings, delete the trip
   | "manage_members"; // invitations, roles, removals
 
 const CAPABILITIES: Record<TripRole, readonly Capability[]> = {
-  owner: ["read", "contribute", "manage_trip", "manage_members"],
-  editor: ["read", "contribute"],
-  viewer: ["read"],
+  owner: ["read", "participate", "contribute", "manage_trip", "manage_members"],
+  editor: ["read", "participate", "contribute"],
+  viewer: ["read", "participate"],
 };
 
 export function can(role: TripRole | null | undefined, capability: Capability) {

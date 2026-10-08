@@ -13,6 +13,7 @@ import { useTripAccess } from "@/components/trip/trip-access";
 import { itineraryHref } from "@/lib/itinerary-format";
 import { entryTitle } from "@/lib/schedule";
 import type { ItineraryEntry, Reservation } from "@/lib/types";
+import { PollFormDialog } from "@/components/polls/poll-form";
 import { ItineraryForm } from "./itinerary-form";
 import type { ActivityFormMode, ExplorePlace, TripDayOption } from "./types";
 
@@ -35,6 +36,8 @@ type Ctx = {
   editEntry: (entry: { item: ItineraryEntry | null; reservation: Reservation | null; date: string }) => void;
   moveEntry: (item: ItineraryEntry) => void;
   removeEntry: (item: ItineraryEntry) => void;
+  /** "Ask the group" about one activity. */
+  askAbout: (item: ItineraryEntry) => void;
   goToDay: (date: string) => void;
 };
 
@@ -79,6 +82,7 @@ export function ItineraryWorkspace({
   const [sheet, setSheet] = useState<SheetState>({ open: false });
   const [moving, setMoving] = useState<ItineraryEntry | null>(null);
   const [removing, setRemoving] = useState<ItineraryEntry | null>(null);
+  const [asking, setAsking] = useState<ItineraryEntry | null>(null);
 
   const goToDay = (date: string) => router.push(itineraryHref(tripId, date, showCancelled), { scroll: false });
   const dayLabel = (date: string) => days.find((d) => d.date === date)?.label ?? date;
@@ -93,6 +97,7 @@ export function ItineraryWorkspace({
       setSheet({ open: true, mode: modeFor(item, reservation), date, item, reservation }),
     moveEntry: setMoving,
     removeEntry: setRemoving,
+    askAbout: setAsking,
     goToDay,
   };
 
@@ -163,6 +168,17 @@ export function ItineraryWorkspace({
         }}
         tripId={tripId}
       />
+
+      {asking ? (
+        <PollFormDialog
+          mode={{ kind: "new", parent: { type: "activity", item_id: asking.id }, seedPlaceId: undefined }}
+          open
+          onOpenChange={(open) => !open && setAsking(null)}
+          places={places.map((p) => ({ id: p.id, name: p.name }))}
+          tripTimeZone={tripTimeZone}
+          scopeLabel={`About ${entryTitle(asking)}`}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={removing !== null}

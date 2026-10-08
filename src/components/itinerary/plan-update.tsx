@@ -27,6 +27,8 @@ import {
 import { secondaryButtonClass } from "@/components/forms/fields";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDateRange, formatShortDay, formatTime } from "@/lib/dates";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
+import type { Clock } from "@/lib/settings";
 import { itineraryHref } from "@/lib/itinerary-format";
 import type { PlanChoice, PlanNotice, PlanOp, PlanPreview } from "@/lib/plans/itinerary-plan";
 import { cn } from "@/lib/utils";
@@ -395,9 +397,9 @@ const REASON: Record<Extract<PlanOp, { kind: "conflict" }>["reason"], string> = 
   retire: "Not part of the new plan.",
 };
 
-function span(start: string | null, end: string | null) {
+function span(start: string | null, end: string | null, clock: Clock) {
   if (!start) return "Flexible";
-  return end ? `${formatTime(start)} – ${formatTime(end)}` : `${formatTime(start)} onward`;
+  return end ? `${formatTime(start, clock)} – ${formatTime(end, clock)}` : `${formatTime(start, clock)} onward`;
 }
 
 function ConflictRow({
@@ -409,6 +411,7 @@ function ConflictRow({
   choice: PlanChoice;
   onChoose: (choice: PlanChoice) => void;
 }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const name = `plan-choice-${c.id}`;
   return (
     <fieldset className="rounded-xl border border-border bg-surface p-3.5">
@@ -419,7 +422,7 @@ function ConflictRow({
       </p>
       {c.item ? (
         <p className="mt-1 text-sm text-ink/80">
-          Plan: {c.item.title} · {span(c.item.start, c.item.end)}
+          Plan: {c.item.title} · {span(c.item.start, c.item.end, clockPref)}
           {c.changes.length ? <span className="text-muted-foreground"> (differs in {c.changes.join(", ")})</span> : null}
         </p>
       ) : null}
@@ -455,6 +458,7 @@ function ConflictRow({
 type ChangeOp = Exclude<PlanOp, { kind: "conflict" | "unchanged" }>;
 
 function ChangesByDay({ ops }: { ops: ChangeOp[] }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const rows = ops.map((op) => {
     if (op.kind === "remove") return { date: op.date, start: null, end: null, title: op.title, tag: "Remove", note: op.label };
     const tag = op.kind === "add" ? "Add" : op.kind === "update" ? "Update" : "Link";
@@ -491,7 +495,7 @@ function ChangesByDay({ ops }: { ops: ChangeOp[] }) {
                     {r.tag}
                   </span>
                   <span className="min-w-0">
-                    <span className="text-muted-foreground">{span(r.start, r.end)}</span> · <span className="text-ink">{r.title}</span>
+                    <span className="text-muted-foreground">{span(r.start, r.end, clockPref)}</span> · <span className="text-ink">{r.title}</span>
                     {r.note ? <span className="block text-muted-foreground">{r.note}</span> : null}
                   </span>
                 </li>

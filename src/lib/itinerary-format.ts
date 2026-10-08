@@ -4,6 +4,7 @@ import { LABELS, type ItineraryCategory } from "@/lib/plan-options";
 import type { AgendaEntry } from "@/lib/schedule";
 import { mapsLink } from "@/lib/explore";
 import { zoneAbbreviation } from "@/lib/time-zones";
+import type { Clock } from "@/lib/settings";
 
 /**
  * Display text for agenda entries. Stored wall-clock values are formatted
@@ -13,14 +14,14 @@ import { zoneAbbreviation } from "@/lib/time-zones";
 const TRANSPORT = new Set(["flight", "train", "car"]);
 
 /** "8:20 AM" + "EDT" for the time column; null when untimed. */
-export function entryClock(e: Pick<AgendaEntry, "date" | "time" | "timeZone">) {
+export function entryClock(e: Pick<AgendaEntry, "date" | "time" | "timeZone">, clock: Clock = "12h") {
   if (!e.time) return null;
-  return { time: formatTime(e.time), zone: e.timeZone ? zoneAbbreviation(e.date, e.time, e.timeZone) : null };
+  return { time: formatTime(e.time, clock), zone: e.timeZone ? zoneAbbreviation(e.date, e.time, e.timeZone) : null };
 }
 
-function zoned(date: string, time: string, zone: string | null) {
+function zoned(date: string, time: string, zone: string | null, clock: Clock) {
   const abbr = zone ? zoneAbbreviation(date, time, zone) : null;
-  return abbr ? `${formatTime(time)} ${abbr}` : formatTime(time);
+  return abbr ? `${formatTime(time, clock)} ${abbr}` : formatTime(time, clock);
 }
 
 /** "Check-in", "Arrives", … for milestones and bookings; null for plain activities. */
@@ -34,7 +35,7 @@ export function entryLabel(e: AgendaEntry) {
 }
 
 /** One muted line under the title: route, the other end, place, length. */
-export function entryDetail(e: AgendaEntry) {
+export function entryDetail(e: AgendaEntry, clock: Clock = "12h") {
   const s = e.schedule;
   const r = e.reservation;
   const parts: string[] = [];
@@ -43,10 +44,10 @@ export function entryDetail(e: AgendaEntry) {
     const route = [r.origin, r.destination].filter(Boolean).join(" → ");
     if (route) parts.push(route);
     if (e.role === "end" && s.date) {
-      parts.push(`left ${formatShortDay(s.date)}${s.startTime ? ` · ${zoned(s.date, s.startTime, s.timeZone)}` : ""}`);
+      parts.push(`left ${formatShortDay(s.date)}${s.startTime ? ` · ${zoned(s.date, s.startTime, s.timeZone, clock)}` : ""}`);
     } else if (s.endTime && s.endDate) {
       const sameDay = s.endDate === s.date;
-      parts.push(`${BOOKING_KIND_META[r.kind].endLabel.toLowerCase()} ${sameDay ? "" : `${formatShortDay(s.endDate)} · `}${zoned(s.endDate, s.endTime, s.endTimeZone)}`);
+      parts.push(`${BOOKING_KIND_META[r.kind].endLabel.toLowerCase()} ${sameDay ? "" : `${formatShortDay(s.endDate)} · `}${zoned(s.endDate, s.endTime, s.endTimeZone, clock)}`);
     } else if (s.endDate && s.endDate !== s.date) {
       parts.push(`${BOOKING_KIND_META[r.kind].endLabel.toLowerCase()} ${formatShortDay(s.endDate)}`);
     }
@@ -63,7 +64,7 @@ export function entryDetail(e: AgendaEntry) {
   }
 
   if (s.endTime && s.endDate) {
-    parts.push(s.endDate === s.date ? `until ${zoned(s.endDate, s.endTime, s.endTimeZone)}` : `until ${formatShortDay(s.endDate)} · ${zoned(s.endDate, s.endTime, s.endTimeZone)}`);
+    parts.push(s.endDate === s.date ? `until ${zoned(s.endDate, s.endTime, s.endTimeZone, clock)}` : `until ${formatShortDay(s.endDate)} · ${zoned(s.endDate, s.endTime, s.endTimeZone, clock)}`);
   } else if (s.endDate && s.date && s.endDate > s.date) {
     parts.push(`until ${formatShortDay(s.endDate)}`);
   }

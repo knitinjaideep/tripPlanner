@@ -22,6 +22,7 @@ import {
   Ticket,
   Trash2,
   TriangleAlert,
+  MessageCircleQuestionMark,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -43,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { entryClock, entryDetail, entryLabel, placeMapsUrl } from "@/lib/itinerary-format";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import type { ItineraryStatus } from "@/lib/plan-options";
 import { agendaCategory, agendaTitle, type AgendaEntry, type OverlapDetail } from "@/lib/schedule";
 import type { ActionState } from "@/lib/types";
@@ -70,7 +72,8 @@ const menuItem = "min-h-11 rounded-lg";
 
 /** One itinerary entry: a timed timeline row, a Flexible card, or an outside-the-trip card. */
 export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
-  const { tripId, moveEntry, removeEntry, editEntry } = useItinerary();
+  const { clock: clockPref } = useDisplayPrefs();
+  const { tripId, moveEntry, removeEntry, editEntry, askAbout } = useItinerary();
   const { viewBooking, editBooking } = useTripWorkspace();
   const { canEdit } = useTripAccess();
   const [pending, startTransition] = useTransition();
@@ -88,8 +91,8 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
   const itemId = item?.id ?? createdItemId;
   const target: EntryTarget = item ? { itemId: item.id } : { reservationId: reservation!.id };
   const label = entryLabel(entry);
-  const detail = entryDetail(entry);
-  const clock = entryClock(entry);
+  const detail = entryDetail(entry, clockPref);
+  const clock = entryClock(entry, clockPref);
   const hasReview = Boolean(item && (item.rating || item.reflection));
   const protectedRest = Boolean(item?.is_protected_rest && !reservation);
   // Plan-written times are planning estimates (bookings carry real times).
@@ -246,6 +249,9 @@ export function EntryCard({ entry, variant, overlaps, reorder }: Props) {
             </DropdownMenuItem>
             <DropdownMenuItem className={menuItem} onSelect={() => run(() => duplicateItineraryItem(tripId, item.id))}>
               <Copy aria-hidden="true" /> Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem className={menuItem} onSelect={() => askAbout(item)}>
+              <MessageCircleQuestionMark aria-hidden="true" /> Ask the group
             </DropdownMenuItem>
           </>
         ) : null}

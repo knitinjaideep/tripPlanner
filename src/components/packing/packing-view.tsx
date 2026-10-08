@@ -1,7 +1,8 @@
 "use client";
 
-import { useOptimistic, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition, type FormEvent } from "react";
 import {
+  AlarmClock,
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -51,10 +52,15 @@ import {
 } from "@/lib/packing";
 import type { ActionState, PackingCategoryWithItems, PackingItem, PackingSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { diaperSummary, quantityLabel } from "@/lib/baby-packing";
 import { PackingCategoryIcon } from "./category-icon";
-import { CopyDialog, DeleteCategoryDialog, StarterDialog } from "./packing-dialogs";
+import { BabyImportDialog, CopyDialog, DeleteCategoryDialog, StarterDialog } from "./packing-dialogs";
 import { PackingCategoryForm, PackingItemForm } from "./packing-forms";
+import { ReminderReviewButton, useReminders } from "@/components/reminders/reminders-provider";
 import { useTripAccess } from "@/components/trip/trip-access";
+import { formatShortDay, formatTime } from "@/lib/dates";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
+import type { MemberChoice } from "@/lib/reminders";
 import { usePackedToggles } from "./use-packed-toggles";
 
 const addButton =
@@ -98,16 +104,22 @@ function applyPatch(categories: PackingCategoryWithItems[], patch: Patch): Packi
 
 export function PackingView({
   tripId,
+  tripTimeZone,
   tripTravelers,
   categories: saved,
   sources,
+  people,
 }: {
   tripId: string;
+  tripTimeZone: string;
   tripTravelers: string[];
   categories: PackingCategoryWithItems[];
   sources: PackingSource[];
+  people: MemberChoice[];
 }) {
   const { canEdit, isOwner } = useTripAccess();
+  const { open: openReminder, openReview, summaryFor, focusTaskId } = useReminders();
+  const nameOf = (id: string | null) => (id ? (people.find((p) => p.id === id)?.name ?? "Someone") : null);
   const [structure, patch] = useOptimistic(saved, applyPatch);
   const [, startTransition] = useTransition();
   const { shown, setPacked } = usePackedToggles(tripId, saved);
@@ -139,6 +151,7 @@ export function PackingView({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [starterOpen, setStarterOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [babyOpen, setBabyOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
@@ -182,9 +195,20 @@ export function PackingView({
     );
   };
 
+  // A reminder's link (?task=…) scrolls to that task, which is shown as it is NOW.
+  useEffect(() => {
+    if (!focusTaskId) return;
+    document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusTaskId]);
+
   const actions = {
     tripId,
     canEdit,
+    nameOf,
+    tripTimeZone,
+    focusTaskId,
+    reminderOn: (id: string) => (summaryFor(id)?.active ?? 0) > 0,
+    openReminder: (item: PackingItem) => openReminder({ type: "task", id: item.id }),
     canReorder,
     categories,
     setPacked,
@@ -227,11 +251,17 @@ export function PackingView({
         <DropdownMenuItem className={menuItem} onSelect={() => setStarterOpen(true)}>
           <ListChecks aria-hidden="true" /> Add from starter checklist…
         </DropdownMenuItem>
+        <DropdownMenuItem className={menuItem} onSelect={() => setBabyOpen(true)}>
+          <ListChecks aria-hidden="true" /> Add Arjun’s Aruba packing list…
+        </DropdownMenuItem>
         {isOwner ? (
           <DropdownMenuItem className={menuItem} onSelect={() => setCopyOpen(true)}>
             <CopyPlus aria-hidden="true" /> Copy from another trip…
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem className={menuItem} onSelect={() => openReview()}>
+          <AlarmClock aria-hidden="true" /> Set up reminders…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className={menuItem} disabled={overall.packed === 0} onSelect={() => setResetOpen(true)}>
           <RotateCcw aria-hidden="true" /> Mark everything unpacked…
@@ -239,6 +269,8 @@ export function PackingView({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  const diapers = diaperSummary(categories);
 
   const visibleSections = scopeAll
     .map((c) => ({ category: c, items: c.items.filter((i) => matchesFilters(i, show, traveler)) }))
@@ -254,7 +286,14 @@ export function PackingView({
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-3xl font-semibold text-ink">Packing</h2>
           {overall.total > 0 ? (
-            <ProgressLine progress={overall} />
+            <>
+              <ProgressLine progress={overall} />
+              {diapers ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Diapers: {diapers.cabin} cabin + {diapers.checked} checked = {diapers.total} planned
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">
               {categories.length ? "Add items to your categories to start checking them off." : "One checklist for the whole family."}
@@ -268,6 +307,7 @@ export function PackingView({
                 <Plus className="size-4" aria-hidden="true" /> Add item
               </button>
             ) : null}
+            <ReminderReviewButton className={cn(ghostButton, "hidden sm:inline-flex")} />
             {canEdit ? moreMenu : null}
           </div>
         ) : null}
@@ -464,6 +504,8 @@ export function PackingView({
               categories={categories}
               defaultCategoryId={itemSheet.categoryId ?? (selected === "all" ? undefined : selected)}
               travelers={travelers}
+              people={people}
+              tripTimeZone={tripTimeZone}
               onCancel={() => setItemSheet({ open: false })}
               onSaved={() => setItemSheet({ open: false })}
             />
@@ -502,6 +544,7 @@ export function PackingView({
           setDeletingId(null);
         }}
       />
+      <BabyImportDialog tripId={tripId} open={babyOpen} onOpenChange={setBabyOpen} current={categories} />
       <StarterDialog tripId={tripId} open={starterOpen} onOpenChange={setStarterOpen} current={categories} />
       <CopyDialog tripId={tripId} open={copyOpen} onOpenChange={setCopyOpen} current={categories} sources={sources} />
       <ConfirmDialog
@@ -594,6 +637,11 @@ function CategoryNavItem({
 
 type Actions = {
   tripId: string;
+  nameOf: (id: string | null) => string | null;
+  tripTimeZone: string;
+  focusTaskId: string | null;
+  reminderOn: (id: string) => boolean;
+  openReminder: (item: PackingItem) => void;
   canReorder: boolean;
   categories: PackingCategoryWithItems[];
   setPacked: (id: string, packed: boolean) => void;
@@ -685,13 +733,14 @@ function CategorySection({
 }
 
 function ItemRow({ item, category, actions }: { item: PackingItem; category: PackingCategoryWithItems; actions: Actions }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const position = category.items.findIndex((i) => i.id === item.id);
   const saving = actions.saving(item.id);
   const others = actions.categories.filter((c) => c.id !== category.id);
   const notesId = item.notes ? `pi-notes-${item.id}` : undefined;
 
   return (
-    <li className="flex items-start gap-1">
+    <li id={`task-${item.id}`} className={cn("flex scroll-mt-28 items-start gap-1 rounded-xl", actions.focusTaskId === item.id && "bg-gold-soft/60 ring-2 ring-gold/60")}>
       <label className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-xl px-2 py-2.5 hover:bg-secondary/50">
         <input
           type="checkbox"
@@ -706,16 +755,29 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
             <span className={cn("break-words", item.is_packed ? "text-muted-foreground line-through decoration-1" : "font-medium text-ink")}>
               {item.label}
             </span>
-            {item.quantity > 1 ? (
+            {quantityLabel(item) ? (
               <span className="rounded-md bg-secondary px-1.5 py-0.5 text-xs font-semibold text-ink tabular-nums">
-                <span aria-hidden="true">×{item.quantity}</span>
-                <span className="sr-only">, quantity {item.quantity}</span>
+                <span className="sr-only">Quantity </span>
+                {quantityLabel(item)}
               </span>
             ) : null}
             {item.traveler_name ? (
               <span className="rounded-full bg-surface-warm px-2 py-0.5 text-xs font-medium text-earth-ink">
                 <span className="sr-only">, for </span>
                 {item.traveler_name}
+              </span>
+            ) : null}
+            {item.assignee_id ? (
+              <span className="rounded-full bg-moss-soft px-2 py-0.5 text-xs font-medium text-moss-ink">
+                <span className="sr-only">, assigned to </span>
+                {actions.nameOf(item.assignee_id)}
+              </span>
+            ) : null}
+            {item.due_date ? (
+              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", item.is_packed ? "bg-secondary text-muted-foreground" : "bg-gold-soft text-gold-ink")}>
+                <span className="sr-only">, due </span>
+                {formatShortDay(item.due_date)}
+                {item.due_time ? `, ${formatTime(item.due_time, clockPref)}` : ""}
               </span>
             ) : null}
             {saving ? (
@@ -731,6 +793,16 @@ function ItemRow({ item, category, actions }: { item: PackingItem; category: Pac
           ) : null}
         </span>
       </label>
+      {item.assignee_id && item.due_date ? (
+        <button
+          type="button"
+          onClick={() => actions.openReminder(item)}
+          className={cn(iconButton, "mt-0.5", actions.reminderOn(item.id) && "text-moss-ink")}
+          aria-label={`Reminders for ${item.label}${actions.reminderOn(item.id) ? " (on)" : ""}`}
+        >
+          <AlarmClock className="size-4" aria-hidden="true" />
+        </button>
+      ) : null}
       {actions.canEdit ? (
       <DropdownMenu>
         <DropdownMenuTrigger className={cn(iconButton, "mt-0.5")} aria-label={`Options for ${item.label}`}>

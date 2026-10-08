@@ -18,7 +18,17 @@ import {
   travelerSuggestions,
   type MergeTargetCategory,
 } from "../src/lib/packing";
-import { packingCopySchema, packingItemSchema, packingStarterSchema } from "../src/lib/validation";
+import {
+  BABY_ITEMS,
+  CABIN_DIAPERS_KEY,
+  CHECKED_DIAPERS_KEY,
+  countPlan,
+  diaperSummary,
+  planBabyImport,
+  quantityLabel,
+  type ExistingCategory,
+} from "../src/lib/baby-packing";
+import { babyImportSchema, packingCopySchema, packingItemSchema, packingStarterSchema } from "../src/lib/validation";
 
 let passed = 0;
 async function check(name: string, fn: () => void | Promise<void>) {
@@ -238,6 +248,85 @@ async function main() {
     await sync.set("i", true);
     assert.equal(shown.at(-1), null);
     assert.equal(errors.length, 1);
+  });
+
+  const find = (label: string, section: string) => BABY_ITEMS.filter((i) => i.label === label && i.section.startsWith(section));
+  // Simulates what an import stores, so a second plan sees it.
+  const stored = (): ExistingCategory[] => {
+    const byCat = new Map<string, ExistingCategory>();
+    BABY_ITEMS.forEach((i, n) => {
+      const c = byCat.get(i.category) ?? { id: i.category, name: i.category, items: [] };
+      c.items.push({ id: `i${n}`, label: i.label, traveler_name: i.traveler, quantity: i.quantity, quantity_text: i.quantityText, source_key: i.key });
+      byCat.set(i.category, c);
+    });
+    return [...byCat.values()];
+  };
+
+  await check("baby list: keys are unique and fit the database limits", () => {
+    assert.equal(new Set(BABY_ITEMS.map((i) => i.key)).size, BABY_ITEMS.length);
+    for (const i of BABY_ITEMS) {
+      assert.ok(i.key.length <= 120 && i.category.length <= 60 && i.label.length <= 120 && (i.quantityText?.length ?? 0) <= 80);
+    }
+  });
+  await check("baby list: cabin and checked allocations stay separate", () => {
+    for (const label of ["Enfamil formula", "Diapers", "Baby spoons", "Bibs"]) {
+      assert.equal(find(label, "Cabin luggage").length, 1, label);
+      assert.equal(find(label, "Checked luggage").length, 1, label);
+    }
+  });
+  await check("baby list: checked diapers 30, cabin 15, derived total 45; no 45 item", () => {
+    assert.equal(BABY_ITEMS.find((i) => i.key === CHECKED_DIAPERS_KEY)?.quantity, 30);
+    assert.equal(BABY_ITEMS.find((i) => i.key === CABIN_DIAPERS_KEY)?.quantity, 15);
+    assert.ok(!BABY_ITEMS.some((i) => i.label === "Diapers" && i.quantity === 45));
+    assert.deepEqual(diaperSummary(stored()), { cabin: 15, checked: 30, total: 45 });
+    const edited = stored();
+    edited.flatMap((c) => c.items).find((i) => i.source_key === CHECKED_DIAPERS_KEY)!.quantity = 20;
+    assert.equal(diaperSummary(edited)?.total, 35);
+  });
+  await check("baby list: repeated swim items appear once, in checked luggage", () => {
+    for (const label of ["Swimsuits", "UPF swim shirts", "Sun hats"]) assert.equal(BABY_ITEMS.filter((i) => i.label === label).length, 1, label);
+    assert.equal(find("Sun hat", "Cabin luggage").length, 1);
+  });
+  await check("baby list: ranges keep their wording and the low end, never the high end", () => {
+    const pouches = find("Baby food/pouches", "Cabin luggage")[0];
+    assert.equal(pouches.quantityText, "4–6");
+    assert.equal(pouches.quantity, 4);
+    assert.equal(find("Enfamil formula", "Checked luggage")[0].quantityText, "Remaining trip supply + 2 extra days");
+    assert.equal(quantityLabel({ quantity: 15, quantity_text: null }), "×15");
+    assert.equal(quantityLabel({ quantity: 1, quantity_text: null }), null);
+  });
+  await check("baby list: one Stroller, one outfit set, no invented adult assignment fields", () => {
+    assert.equal(BABY_ITEMS.filter((i) => /stroller$/i.test(i.label) && i.label === "Stroller").length, 1);
+    assert.equal(find("Complete outfits", "Cabin luggage")[0].quantity, 3);
+    assert.ok(BABY_ITEMS.every((i) => !("assignee_id" in i)));
+    assert.deepEqual(BABY_ITEMS.filter((i) => i.label === "Spare shirt").map((i) => i.traveler).sort(), ["Nitin", "Pavani"]);
+  });
+  await check("baby import: an empty list is all new; re-planning after storing adds nothing", () => {
+    assert.equal(countPlan(planBabyImport([])).added, BABY_ITEMS.length);
+    const again = countPlan(planBabyImport(stored()));
+    assert.deepEqual(again, { added: 0, matched: BABY_ITEMS.length, conflicts: 0, ambiguous: 0 });
+  });
+  await check("baby import: edited quantity is a reviewable conflict, never summed", () => {
+    const list = stored();
+    const row = list.flatMap((c) => c.items).find((i) => i.source_key === CABIN_DIAPERS_KEY)!;
+    row.quantity = 12;
+    const entry = planBabyImport(list).find((p) => p.item.key === CABIN_DIAPERS_KEY)!;
+    assert.equal(entry.status, "conflict");
+  });
+  await check("baby import: same name in the same category is adopted; elsewhere is ambiguous, not duplicated", () => {
+    const first = BABY_ITEMS[0];
+    const adopted = planBabyImport([
+      { id: "c", name: first.category.toUpperCase(), items: [{ id: "x", label: ` ${first.label} `, traveler_name: "arjun", quantity: first.quantity, quantity_text: first.quantityText, source_key: null }] },
+    ]).find((p) => p.item.key === first.key)!;
+    assert.equal(adopted.status, "match");
+    const starter = planBabyImport([
+      { id: "b", name: "Baby", items: [{ id: "y", label: "Stroller", traveler_name: null, quantity: 1, quantity_text: null, source_key: null }] },
+    ]).find((p) => p.item.label === "Stroller")!;
+    assert.equal(starter.status, "ambiguous");
+  });
+  await check("baby import: input accepts only known keys", () => {
+    assert.ok(babyImportSchema.safeParse({ quantities: [CABIN_DIAPERS_KEY], addAnyway: [] }).success);
+    assert.ok(!babyImportSchema.safeParse({ quantities: ["nope"], addAnyway: [] }).success);
   });
 
   console.log(`\n${passed} packing checks passed.`);

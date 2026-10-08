@@ -312,14 +312,18 @@ async function main() {
     assert.ok(blocks.length >= 12, `found ${blocks.length} DAL functions`);
     for (const block of blocks) {
       const name = /^export (?:async function|const) (\w+)/.exec(block)![1];
-      if (name === "requireUser") continue;
+      // The scheduler entry point acts without a session by design; its only caller (the cron route) checks a secret.
+      if (name === "requireUser" || name === "runEveningPreviewJob" || name === "runReminderJob") continue;
       // Directly, or through a trip-access helper (checked below to verify the session and resolve the role).
       assert.match(
         block,
-        /await require(User|UserId)\(\)|await getCurrentUser\(\)|\b(readTrip|editTrip|ownTrip|withTripWrite)\(/,
+        /await require(User|UserId|SessionUser)\(\)|await getCurrentUser\(\)|\b(readTrip|editTrip|ownTrip|participateTrip|withTripWrite)\(/,
         `${name} must verify the session`,
       );
     }
+    // The throwing variant used by the inbox's route handlers and actions must itself check the session.
+    const sessionHelper = src.slice(src.indexOf("async function requireSessionUser"), src.indexOf("\n}\n", src.indexOf("async function requireSessionUser")));
+    assert.match(sessionHelper, /await getCurrentUser\(\)[\s\S]*AuthRequiredError/, "requireSessionUser must verify the session");
     for (const helper of ["readTrip", "withTripWrite"]) {
       const body = src.slice(src.indexOf(`async function ${helper}`), src.indexOf("\n}\n", src.indexOf(`async function ${helper}`)));
       assert.match(body, /await require(User|UserId)\(\)/, `${helper} must verify the session`);
@@ -333,7 +337,30 @@ async function main() {
       assert.ok(!/NEXT_PUBLIC_(DATABASE|NEON_AUTH)/.test(src), `${file} exposes a server secret`);
     }
     const routes = files.filter((f) => /\/route\.ts$/.test(f));
-    assert.deepEqual(routes, ["src/app/api/auth/[...path]/route.ts", "src/app/api/trips/[tripId]/version/route.ts", "src/app/invite/route.ts"]);
+    // The two inbox routes only read the signed-in person's own notifications (the person comes from the session).
+    assert.deepEqual(routes, [
+      "src/app/api/auth/[...path]/route.ts",
+      "src/app/api/cron/evening-preview/route.ts",
+      "src/app/api/cron/reminders/route.ts",
+      "src/app/api/notifications/route.ts",
+      "src/app/api/notifications/summary/route.ts",
+      "src/app/api/trips/[tripId]/version/route.ts",
+      "src/app/invite/route.ts",
+    ]);
+    // The scheduler route is secret-authenticated, refuses everything without CRON_SECRET, and never takes SQL.
+    const cronAuth = readFileSync("src/lib/cron-auth.ts", "utf8");
+    assert.match(cronAuth, /CRON_SECRET/);
+    assert.match(cronAuth, /timingSafeEqual/);
+    assert.match(cronAuth, /not_configured/);
+    for (const file of ["src/app/api/cron/evening-preview/route.ts", "src/app/api/cron/reminders/route.ts"]) {
+      const cron = readFileSync(file, "utf8");
+      assert.match(cron, /rejectUnlessCron\(request\)/, `${file} must authenticate with the secret before doing anything`);
+      assert.ok(cron.indexOf("rejectUnlessCron") < cron.search(/run\w+Job\(/), `${file} must check the secret before running the job`);
+    }
+    for (const file of ["src/app/api/notifications/route.ts", "src/app/api/notifications/summary/route.ts"]) {
+      const src = readFileSync(file, "utf8");
+      assert.ok(!/request\.(json|formData)|searchParams\.get\("(user|recipient|owner)/.test(src), `${file} must not take a person from the request`);
+    }
   });
 }
 

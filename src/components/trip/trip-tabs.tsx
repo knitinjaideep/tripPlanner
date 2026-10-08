@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Compass, Home, Images, Luggage, Ticket, type LucideIcon } from "lucide-react";
+import { CalendarDays, Compass, Home, Images, Luggage, MessageCircleQuestionMark, Ticket, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tab = { label: string; icon: LucideIcon; href?: string };
@@ -16,6 +16,7 @@ export function TripTabs({ tripId }: { tripId: string }) {
     { label: "Bookings", icon: Ticket, href: `${base}/bookings` },
     { label: "Explore", icon: Compass, href: `${base}/explore` },
     { label: "Packing", icon: Luggage, href: `${base}/packing` },
+    { label: "Ask the group", icon: MessageCircleQuestionMark, href: `${base}/polls` },
     { label: "Memories", icon: Images, href: `${base}/memories` },
   ];
 

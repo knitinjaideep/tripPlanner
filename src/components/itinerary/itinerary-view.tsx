@@ -3,6 +3,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { CalendarClock, ChevronLeft, ChevronRight, Eye, EyeOff, Plus } from "lucide-react";
 import { MascotImage } from "@/components/mascot";
+import { PollsNearby } from "@/components/polls/polls-view";
+import type { PollView } from "@/lib/polls";
 import { getCover } from "@/lib/covers";
 import { formatDayDate, formatShortDay, parseDate, todayInTimeZone } from "@/lib/dates";
 import { itineraryHref } from "@/lib/itinerary-format";
@@ -27,11 +29,13 @@ export function ItineraryView({
   trip,
   items,
   places,
+  polls,
   query,
 }: {
   trip: TripWithDetails;
   items: ItineraryEntry[];
   places: PlaceWithVisits[];
+  polls: PollView[];
   query: { day?: string | string[]; cancelled?: string | string[] };
 }) {
   const showCancelled = query.cancelled === "1";
@@ -224,11 +228,20 @@ export function ItineraryView({
             </Link>
           ) : null}
 
+          <PollsNearby
+            tripId={trip.id}
+            tripTimeZone={trip.time_zone}
+            polls={polls.filter((p) => p.status !== "canceled" && (p.parent.day === day.date || p.parent.item?.date === day.date))}
+            places={explorePlaces.map((p) => ({ id: p.id, name: p.name }))}
+            parent={{ type: "day", day: day.date }}
+            scopeLabel={`For ${formatShortDay(day.date)}`}
+          />
+
           <DayTimeline entries={day.entries} />
         </div>
 
         <aside className="lg:col-span-4">
-          <div className="space-y-5 lg:sticky lg:top-24">
+          <div className="space-y-5 lg:sticky lg:top-[calc(6rem+var(--atlas-bar-h,0px))]">
             <ExplorePanel places={explorePlaces} dayLabel={dayLabel} />
           </div>
         </aside>

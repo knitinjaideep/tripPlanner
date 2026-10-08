@@ -18,6 +18,7 @@ import { CollectionImportCard, type CollectionOffer } from "./collection-import"
 import { AddPlaceButton, ExploreWorkspace } from "./explore-workspace";
 import { ExploreToolbar } from "./explore-toolbar";
 import { PlaceCard } from "./place-card";
+import type { PollView } from "@/lib/polls";
 import { PlaceDetailSheet, type DetailAction } from "./place-detail";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -34,12 +35,14 @@ export function ExploreView({
   places,
   items,
   collections,
+  polls,
   query,
 }: {
   trip: TripWithDetails;
   places: PlaceWithVisits[];
   items: ItineraryEntry[];
   collections: CollectionOffer[];
+  polls: PollView[];
   query: Query;
 }) {
   const filters = parseExploreFilters(query);
@@ -64,7 +67,9 @@ export function ExploreView({
     label: `Day ${i + 1} · ${formatShortDay(date)}`,
   }));
   // Today where the trip happens, kept inside the trip's dates.
-  const defaultDate = previewDay(trip.start_date, trip.end_date, todayInTimeZone(trip.time_zone));
+  // `?day=` (from "Use this choice" on a poll) pre-selects that trip day; anything else falls back to today.
+  const requestedDay = typeof query.day === "string" && days.some((d) => d.date === query.day) ? query.day : null;
+  const defaultDate = requestedDay ?? previewDay(trip.start_date, trip.end_date, todayInTimeZone(trip.time_zone));
 
   return (
     <ExploreWorkspace tripId={trip.id} places={places} filters={filters}>
@@ -155,6 +160,8 @@ export function ExploreView({
           reservations={trip.reservations}
           days={days}
           defaultDate={defaultDate}
+          polls={polls.filter((p) => p.parent.type === "place" && p.parent.place?.id === open.id)}
+          pollPlaces={places.map((p) => ({ id: p.id, name: p.name }))}
           initialAction={action}
           closeHref={exploreHref(trip.id, filters)}
         />

@@ -21,3 +21,9 @@ export async function getViewerTimeZone() {
   if (tz && isValidTimeZone(tz)) return tz;
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
+
+/** The zone the browser reported, or null before it has (so the UI can fall back to the browser's own). */
+export async function getConfiguredTimeZone() {
+  const tz = (await cookies()).get(TZ_COOKIE)?.value;
+  return tz && isValidTimeZone(tz) ? tz : null;
+}

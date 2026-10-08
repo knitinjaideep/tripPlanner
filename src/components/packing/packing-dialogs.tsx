@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { ArrowLeft, Info, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { applyPackingStarter, copyPackingFromTrip, deletePackingCategory } from "@/app/actions/packing";
+import { applyPackingStarter, copyPackingFromTrip, deletePackingCategory, importBabyPacking } from "@/app/actions/packing";
 import { secondaryButtonClass } from "@/components/forms/fields";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BABY_BAG_NOTES, BABY_SECTION_NOTES, countPlan, planBabyImport, quantityLabel } from "@/lib/baby-packing";
 import { formatDateRange } from "@/lib/dates";
 import { STARTER_CATEGORIES, planMerge, starterSource, type MergeTargetCategory, type StarterKey } from "@/lib/packing";
 import type { PackingCategoryWithItems, PackingSource } from "@/lib/types";
@@ -636,5 +637,152 @@ function DeleteCategoryBody({
         )}
       </Footer>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Arjun's Aruba list                                                  */
+/* ------------------------------------------------------------------ */
+
+export function BabyImportDialog({
+  tripId,
+  open,
+  onOpenChange,
+  current,
+}: {
+  tripId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  current: PackingCategoryWithItems[];
+}) {
+  const [pending, startTransition] = useTransition();
+  // Review choices: nothing is changed or added beyond "new" unless ticked.
+  const [quantities, setQuantities] = useState<Set<string>>(() => new Set());
+  const [addAnyway, setAddAnyway] = useState<Set<string>>(() => new Set());
+  const plan = planBabyImport(current);
+  const counts = countPlan(plan);
+  const conflicts = plan.filter((p) => p.status === "conflict");
+  const ambiguous = plan.filter((p) => p.status === "ambiguous");
+  const flip = (set: Set<string>, key: string, on: boolean) => {
+    const next = new Set(set);
+    if (on) next.add(key);
+    else next.delete(key);
+    return next;
+  };
+  const changes = counts.added + quantities.size + addAnyway.size;
+
+  return (
+    <Shell
+      open={open}
+      onOpenChange={onOpenChange}
+      pending={pending}
+      title="Add Arjun’s Aruba packing list"
+      description="Your own planning targets, split into cabin, checked and airport gear. Nothing you already have is changed."
+    >
+      <div className="max-h-[60dvh] space-y-4 overflow-y-auto px-5 pb-5 sm:px-6">
+        <ul className="grid grid-cols-3 gap-2 text-center text-sm">
+          {[
+            [counts.added, "new"],
+            [counts.matched, "already there"],
+            [counts.conflicts + counts.ambiguous, "to review"],
+          ].map(([n, label]) => (
+            <li key={label} className="rounded-xl border border-border bg-white p-2.5">
+              <span className="block text-xl font-semibold tabular-nums text-ink">{n}</span>
+              <span className="text-muted-foreground">{label}</span>
+            </li>
+          ))}
+        </ul>
+
+        <ul className="space-y-1 text-sm text-muted-foreground">
+          {BABY_SECTION_NOTES.map((n) => (
+            <li key={n.section}>
+              <span className="font-medium text-ink">{n.section}:</span> {n.note}
+            </li>
+          ))}
+          {BABY_BAG_NOTES.map((n) => (
+            <li key={n.bag}>
+              <span className="font-medium text-ink">{n.bag}:</span> {n.note}
+            </li>
+          ))}
+        </ul>
+
+        {conflicts.length > 0 ? (
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-semibold text-ink">Quantity differs — tick to use the list’s quantity</legend>
+            <ul className="divide-y divide-border rounded-xl border border-border bg-white">
+              {conflicts.map((p) => (
+                <li key={p.item.key}>
+                  <label className="flex cursor-pointer items-start gap-3 p-3 hover:bg-secondary/50">
+                    <input
+                      type="checkbox"
+                      className={checkbox}
+                      checked={quantities.has(p.item.key)}
+                      onChange={(e) => setQuantities((s) => flip(s, p.item.key, e.target.checked))}
+                    />
+                    <span className="min-w-0 flex-1 text-sm">
+                      <span className="block font-medium text-ink">{p.item.label} <span className="font-normal text-muted-foreground">· {p.item.category}</span></span>
+                      <span className="text-muted-foreground">
+                        {p.status === "conflict" ? (quantityLabel(p.current) ?? "×1") : null} → {quantityLabel(p.item) ?? "×1"}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+        ) : null}
+
+        {ambiguous.length > 0 ? (
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-semibold text-ink">Similar item elsewhere — tick to add anyway</legend>
+            <ul className="divide-y divide-border rounded-xl border border-border bg-white">
+              {ambiguous.map((p) => (
+                <li key={p.item.key}>
+                  <label className="flex cursor-pointer items-start gap-3 p-3 hover:bg-secondary/50">
+                    <input
+                      type="checkbox"
+                      className={checkbox}
+                      checked={addAnyway.has(p.item.key)}
+                      onChange={(e) => setAddAnyway((s) => flip(s, p.item.key, e.target.checked))}
+                    />
+                    <span className="min-w-0 flex-1 text-sm">
+                      <span className="block font-medium text-ink">{p.item.label} <span className="font-normal text-muted-foreground">· {p.item.category}</span></span>
+                      <span className="text-muted-foreground">
+                        {p.status === "ambiguous" ? `Already in “${p.elsewhere}”` : null}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+        ) : null}
+      </div>
+      <Footer>
+        <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClass} disabled={pending}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={primaryButton}
+          disabled={pending || changes === 0}
+          aria-busy={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const result = await importBabyPacking(tripId, { quantities: [...quantities], addAnyway: [...addAnyway] });
+              if (result.ok) {
+                toast.success(result.message);
+                onOpenChange(false);
+              } else {
+                toast.error(result.message ?? "Couldn’t add the list.");
+              }
+            })
+          }
+        >
+          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+          {pending ? "Adding…" : changes === 0 ? "Nothing to add" : `Apply ${plural(changes, "change")}`}
+        </button>
+      </Footer>
+    </Shell>
   );
 }

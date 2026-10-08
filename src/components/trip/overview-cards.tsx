@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getDisplayPrefsForUser } from "@/lib/dal";
+import type { Clock } from "@/lib/settings";
 import { ArrowRight, BedDouble, FileText, Luggage, MapPin, Plane, Plus } from "lucide-react";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, formatZonedTime, looksLikeCode, placeSummary, stayNights, upcomingFirst } from "@/lib/booking-format";
@@ -58,12 +60,14 @@ function FlightMoment({
   date,
   time,
   timeZone,
+  clock,
   align = "left",
   fallback,
 }: {
   date: string | null;
   time: string | null;
   timeZone: string | null;
+  clock: Clock;
   align?: "left" | "right";
   fallback?: string;
 }) {
@@ -72,7 +76,7 @@ function FlightMoment({
       {date ? (
         <>
           {formatDayDate(date)}
-          {time ? <span className="block font-medium text-ink">{formatZonedTime(date, time, timeZone)}</span> : null}
+          {time ? <span className="block font-medium text-ink">{formatZonedTime(date, time, timeZone, clock)}</span> : null}
         </>
       ) : (
         fallback
@@ -81,7 +85,8 @@ function FlightMoment({
   );
 }
 
-export function FlightCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+export async function FlightCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+  const { clock } = await getDisplayPrefsForUser();
   const flights = trip.reservations.filter((b) => b.kind === "flight" && b.status !== "cancelled");
   const flight = upcomingFirst(flights, today);
 
@@ -102,7 +107,7 @@ export function FlightCard({ trip, today, className }: { trip: TripWithDetails; 
     );
   }
 
-  const departs = formatMoment(flight.start_date, flight.start_time, false, flight.start_time_zone);
+  const departs = formatMoment(flight.start_date, flight.start_time, false, flight.start_time_zone, clock);
   const hasRoute = Boolean(flight.origin || flight.destination);
   const flightNumber = detailValue("flight", flight.details, "flight_number");
 
@@ -134,10 +139,11 @@ export function FlightCard({ trip, today, className }: { trip: TripWithDetails; 
             date={flight.start_date}
             time={flight.start_time}
             timeZone={flight.start_time_zone}
+            clock={clock}
             fallback="Departure not set"
           />
           <span aria-hidden="true" />
-          <FlightMoment date={flight.end_date} time={flight.end_time} timeZone={flight.end_time_zone} align="right" />
+          <FlightMoment date={flight.end_date} time={flight.end_time} timeZone={flight.end_time_zone} clock={clock} align="right" />
           <p className="sr-only">
             From {flight.origin ?? "unknown"} to {flight.destination ?? "unknown"}
           </p>
@@ -187,7 +193,8 @@ export function FlightCard({ trip, today, className }: { trip: TripWithDetails; 
 /* Stay — photographic card (illustrative destination photo)          */
 /* ------------------------------------------------------------------ */
 
-export function StayCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+export async function StayCard({ trip, today, className }: { trip: TripWithDetails; today: string; className?: string }) {
+  const { clock } = await getDisplayPrefsForUser();
   const stays = trip.reservations.filter((b) => b.kind === "lodging" && b.status !== "cancelled");
   const stay = upcomingFirst(stays, today);
 
@@ -234,7 +241,7 @@ export function StayCard({ trip, today, className }: { trip: TripWithDetails; to
         <h2 className="font-display text-[1.75rem] leading-tight font-semibold drop-shadow-sm">{stay.title}</h2>
         {sub ? <p className="mt-1 text-[0.9375rem] text-white/90">{sub}</p> : null}
         {stay.start_date ? (
-          <p className="mt-1 text-sm text-white/80">Check-in {formatMoment(stay.start_date, stay.start_time, true, stay.start_time_zone)}</p>
+          <p className="mt-1 text-sm text-white/80">Check-in {formatMoment(stay.start_date, stay.start_time, true, stay.start_time_zone, clock)}</p>
         ) : null}
         <p className="mt-3 text-[0.6875rem] text-white/65">Illustrative destination photo</p>
       </div>
@@ -294,7 +301,7 @@ export function GlanceCard({ trip, className }: { trip: TripWithDetails; classNa
 
 const PREVIEW_LIMIT = 4;
 
-export function DayPlanCard({
+export async function DayPlanCard({
   trip,
   items,
   todayInTripZone,
@@ -305,6 +312,7 @@ export function DayPlanCard({
   todayInTripZone: string;
   className?: string;
 }) {
+  const { clock: clockPref } = await getDisplayPrefsForUser();
   // Same merge as the Itinerary tab: a booking shows once, cancelled ones are left out.
   const agenda = buildAgenda({ items, reservations: trip.reservations, tripStart: trip.start_date, tripEnd: trip.end_date });
   const date = previewDay(trip.start_date, trip.end_date, todayInTripZone);
@@ -341,7 +349,7 @@ export function DayPlanCard({
       ) : (
         <ol className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 md:grid-cols-2">
           {shown.map((e) => {
-            const clock = entryClock(e);
+            const clock = entryClock(e, clockPref);
             const label = entryLabel(e);
             const done = e.item?.status === "completed";
             return (
@@ -498,7 +506,8 @@ export function NotesCard({ notes, beside, className }: { notes: string; beside?
   );
 }
 
-export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
+export async function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
+  const { clock } = await getDisplayPrefsForUser();
   const place = placeSummary(b);
   return (
     <div className="card-surface flex items-center gap-2 p-2 pr-2 sm:pr-3">
@@ -510,7 +519,7 @@ export function BookingSummaryRow({ booking: b }: { booking: Reservation }) {
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             {BOOKING_KIND_META[b.kind].label}
-            {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true, b.start_time_zone)?.split(" · ")[1]}` : ""}
+            {b.start_time ? ` · ${formatMoment(b.start_date, b.start_time, true, b.start_time_zone, clock)?.split(" · ")[1]}` : ""}
           </span>
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn("min-w-0 font-semibold break-words text-ink group-hover:text-moss-ink", b.status === "cancelled" && "text-muted-foreground line-through")}>

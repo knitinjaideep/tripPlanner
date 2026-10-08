@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import type { CurrentUser } from "@/lib/user";
 
 export function SiteHeader({ user }: { user: CurrentUser }) {
@@ -15,6 +16,7 @@ export function SiteHeader({ user }: { user: CurrentUser }) {
           >
             My trips
           </Link>
+          <NotificationBell />
           <AccountMenu
             name={user.displayName}
             email={user.email}

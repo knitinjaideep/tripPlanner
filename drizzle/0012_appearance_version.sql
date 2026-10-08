@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "appearance_version" integer DEFAULT 0 NOT NULL;

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  acceptInvitationByIdForUser,
   acceptInvitationForUser,
   createInvitationForUser,
   getTripForUser,
@@ -207,9 +208,22 @@ const ACCEPT_MESSAGES: Record<string, string> = {
 // The (prev, formData) parameters are the form-action signature; the token is the only input.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function acceptInvitation(token: string, _prev: AcceptState, _formData: FormData): Promise<AcceptState> {
+  return finishAccept("acceptInvitation", () => acceptInvitationForUser(token));
+}
+
+/** The same click on the invitation page opened from the inbox (addressed by invitation id, never the token). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function acceptInvitationById(invitationId: string, _prev: AcceptState, _formData: FormData): Promise<AcceptState> {
+  return finishAccept("acceptInvitationById", () => acceptInvitationByIdForUser(invitationId));
+}
+
+async function finishAccept(
+  context: string,
+  accept: () => Promise<Awaited<ReturnType<typeof acceptInvitationForUser>>>,
+): Promise<AcceptState> {
   let destination: string | null = null;
-  const result = await guarded("acceptInvitation", async () => {
-    const outcome = await acceptInvitationForUser(token);
+  const result = await guarded(context, async () => {
+    const outcome = await accept();
     if ("tripId" in outcome) {
       destination = `/trips/${outcome.tripId}`;
       return { ok: true };

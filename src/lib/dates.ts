@@ -1,4 +1,6 @@
 import { differenceInCalendarDays, format, isSameMonth, isSameYear, parseISO } from "date-fns";
+import { formatClockTime } from "@/lib/display-format";
+import type { Clock } from "@/lib/settings";
 
 /**
  * Trips and bookings store calendar dates ("2026-10-14") and local
@@ -69,12 +71,9 @@ export function formatShortDay(date: string) {
   return format(parseDate(date), "EEE, MMM d");
 }
 
-/** "8:20 AM" from "08:20:00" */
-export function formatTime(time: string) {
-  const [h, m] = time.split(":").map(Number);
-  const suffix = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${String(m).padStart(2, "0")} ${suffix}`;
+/** "8:20 AM" from "08:20:00" ("08:20" with the 24-hour preference). Presentation only. */
+export function formatTime(time: string, clock: Clock = "12h") {
+  return formatClockTime(time, clock);
 }
 
 /** "08:20" for <input type="time"> */

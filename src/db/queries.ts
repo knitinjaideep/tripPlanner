@@ -1,6 +1,8 @@
 import "server-only";
-import { and, asc, count, eq, getTableColumns, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, getTableColumns, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "./index";
+import { safely } from "./notifications";
+import { syncSubject, syncTrip } from "./reminders";
 import {
   documents,
   itineraryItems,
@@ -9,6 +11,7 @@ import {
   placeMemberState,
   places,
   reservations,
+  tripMembers,
   tripMemories,
   trips,
 } from "./schema";
@@ -33,6 +36,7 @@ import {
   type ImportSummary,
 } from "@/lib/collections/collection";
 import { todayInTimeZone } from "@/lib/dates";
+import { planBabyImport, type PlanEntry } from "@/lib/baby-packing";
 import { normalizeName, planMerge, starterSource, type MergeSourceCategory, type StarterKey } from "@/lib/packing";
 import {
   addDays,
@@ -175,6 +179,8 @@ export async function updateTrip(db: Db, ownerId: OwnerId, tripId: string, input
     .set(input)
     .where(and(eq(trips.id, tripId), eq(trips.owner_id, ownerId)))
     .returning({ id: trips.id });
+  // A booking without a zone of its own follows the trip's zone, so its reminders are re-evaluated.
+  if (rows.length === 1) await safely(db, "reminder_sync_trip", (tx) => syncTrip(tx, tripId));
   return rows.length === 1;
 }
 
@@ -217,7 +223,7 @@ export type ReservationUpdateResult =
  * A reservation that backs an itinerary visit must keep a date (the visit
  * takes its schedule from it), so clearing the date is refused.
  */
-export async function updateReservation(
+async function updateReservationWrite(
   db: Db,
   ownerId: OwnerId,
   tripId: string,
@@ -257,6 +263,20 @@ export async function updateReservation(
     }
     return { ok: false, reason: "not_found" };
   });
+}
+
+/** Edits a booking. Its reminders follow the change (time, zone or status) in the same transaction when called through the DAL. */
+export async function updateReservation(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  reservationId: string,
+  input: ReservationInput,
+  expectedUpdatedAt?: string,
+) {
+  const result = await updateReservationWrite(db, ownerId, tripId, reservationId, input, expectedUpdatedAt);
+  if (result.ok) await safely(db, "reminder_sync_booking", (tx) => syncSubject(tx, tripId, "booking", reservationId));
+  return result;
 }
 
 /**
@@ -1717,7 +1737,39 @@ function sameIdSet(actual: string[], given: string[]) {
 
 export type PackingItemWriteResult =
   | { ok: true; id: string }
-  | { ok: false; reason: "not_found" | "category_not_in_trip" | "conflict" };
+  | { ok: false; reason: "not_found" | "category_not_in_trip" | "conflict" | "assignee_not_member" };
+
+/**
+ * Assignment and deadline fields of a task write. Only the fields the caller
+ * sent are touched. An assignee must be a CURRENT member (owner or
+ * trip_members); the due time zone is the trip's zone, set by the server —
+ * never taken from the request.
+ */
+async function taskFields(
+  tx: Tx,
+  ownerId: OwnerId,
+  tripId: string,
+  tripZone: string,
+  input: PackingItemInput,
+): Promise<{ ok: true; fields: Partial<typeof packingItems.$inferInsert> } | { ok: false; reason: "assignee_not_member" }> {
+  const fields: Partial<typeof packingItems.$inferInsert> = {};
+  if (input.assignee_id !== undefined) {
+    if (input.assignee_id !== null && input.assignee_id !== ownerId) {
+      const [member] = await tx
+        .select({ id: tripMembers.id })
+        .from(tripMembers)
+        .where(and(eq(tripMembers.trip_id, tripId), eq(tripMembers.owner_id, ownerId), eq(tripMembers.user_id, input.assignee_id)));
+      if (!member) return { ok: false, reason: "assignee_not_member" };
+    }
+    fields.assignee_id = input.assignee_id;
+  }
+  if (input.due_date !== undefined) {
+    fields.due_date = input.due_date;
+    fields.due_time = input.due_date ? (input.due_time ?? null) : null;
+    fields.due_time_zone = input.due_date ? tripZone : null;
+  }
+  return { ok: true, fields };
+}
 
 async function categoryInTrip(tx: Tx, ownerId: OwnerId, tripId: string, categoryId: string) {
   const [row] = await tx
@@ -1753,7 +1805,7 @@ function mapPackingItemError(error: unknown): Extract<PackingItemWriteResult, { 
  * New items go last in their category. `requestId` (a form-generated UUID)
  * becomes the row's id, so a double submit returns the same item.
  */
-export async function createPackingItem(
+async function createPackingItemWrite(
   db: Db,
   ownerId: OwnerId,
   tripId: string,
@@ -1762,14 +1814,17 @@ export async function createPackingItem(
 ): Promise<PackingItemWriteResult> {
   try {
     return await db.transaction(async (tx): Promise<PackingItemWriteResult> => {
-      if (!(await ownedTrip(tx, ownerId, tripId))) return { ok: false, reason: "not_found" };
+      const trip = await ownedTrip(tx, ownerId, tripId);
+      if (!trip) return { ok: false, reason: "not_found" };
       if (!(await categoryInTrip(tx, ownerId, tripId, input.category_id))) {
         return { ok: false, reason: "category_not_in_trip" };
       }
+      const task = await taskFields(tx, ownerId, tripId, trip.time_zone, input);
+      if (!task.ok) return task;
       const next = await nextItemOrder(tx, ownerId, input.category_id);
       const [row] = await tx
         .insert(packingItems)
-        .values({ ...input, ...(requestId ? { id: requestId } : {}), sort_order: next, trip_id: tripId, owner_id: ownerId })
+        .values({ ...input, ...task.fields, ...(requestId ? { id: requestId } : {}), sort_order: next, trip_id: tripId, owner_id: ownerId })
         .onConflictDoNothing({ target: packingItems.id })
         .returning({ id: packingItems.id });
       if (row) return { ok: true, id: row.id };
@@ -1784,8 +1839,20 @@ export async function createPackingItem(
   }
 }
 
+export async function createPackingItem(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  input: PackingItemInput,
+  requestId?: string,
+): Promise<PackingItemWriteResult> {
+  const result = await createPackingItemWrite(db, ownerId, tripId, input, requestId);
+  if (result.ok) await safely(db, "reminder_sync_task", (tx) => syncSubject(tx, tripId, "task", result.id));
+  return result;
+}
+
 /** Edits an item; moving it to another category puts it last there. Packed state is untouched. */
-export async function updatePackingItem(
+async function updatePackingItemWrite(
   db: Db,
   ownerId: OwnerId,
   tripId: string,
@@ -1799,6 +1866,7 @@ export async function updatePackingItem(
       const [current] = await tx
         .select({
           category_id: packingItems.category_id,
+          quantity: packingItems.quantity,
           stale: expectedUpdatedAt
             ? sql<boolean>`${packingItems.updated_at} <> ${expectedUpdatedAt}::timestamptz`
             : sql<boolean>`false`,
@@ -1811,11 +1879,16 @@ export async function updatePackingItem(
       if (!(await categoryInTrip(tx, ownerId, tripId, input.category_id))) {
         return { ok: false, reason: "category_not_in_trip" };
       }
+      const trip = await ownedTrip(tx, ownerId, tripId);
+      if (!trip) return { ok: false, reason: "not_found" };
+      const task = await taskFields(tx, ownerId, tripId, trip.time_zone, input);
+      if (!task.ok) return task;
       const moved = current.category_id !== input.category_id;
       const sort = moved ? { sort_order: await nextItemOrder(tx, ownerId, input.category_id) } : {};
       const rows = await tx
         .update(packingItems)
-        .set({ ...input, ...sort })
+        // Editing the number drops the supplied wording ("4–6 pouches"); saving it unchanged keeps it.
+        .set({ ...input, ...task.fields, ...sort, ...(input.quantity !== current.quantity ? { quantity_text: null } : {}) })
         .where(where)
         .returning({ id: packingItems.id });
       return rows[0] ? { ok: true, id: rows[0].id } : { ok: false, reason: "not_found" };
@@ -1823,6 +1896,20 @@ export async function updatePackingItem(
   } catch (error) {
     return mapPackingItemError(error);
   }
+}
+
+/** Due time, assignee or label changed: its reminders are rescheduled, reassigned or canceled with it. */
+export async function updatePackingItem(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  itemId: string,
+  input: PackingItemInput,
+  expectedUpdatedAt?: string,
+): Promise<PackingItemWriteResult> {
+  const result = await updatePackingItemWrite(db, ownerId, tripId, itemId, input, expectedUpdatedAt);
+  if (result.ok) await safely(db, "reminder_sync_task", (tx) => syncSubject(tx, tripId, "task", itemId));
+  return result;
 }
 
 /** Move an item to another category of the same trip (appended last). */
@@ -1865,6 +1952,8 @@ export async function setPackingItemPacked(
     .set({ is_packed: packed })
     .where(and(eq(packingItems.id, itemId), eq(packingItems.trip_id, tripId), eq(packingItems.owner_id, ownerId)))
     .returning({ id: packingItems.id });
+  // Completing a task cancels its reminders; un-completing one brings back what is still ahead.
+  if (rows.length === 1) await safely(db, "reminder_sync_task", (tx) => syncSubject(tx, tripId, "task", itemId));
   return rows.length === 1;
 }
 
@@ -1877,6 +1966,7 @@ export async function unpackAllPackingItems(db: Db, ownerId: OwnerId, tripId: st
       .set({ is_packed: false })
       .where(and(eq(packingItems.trip_id, tripId), eq(packingItems.owner_id, ownerId), eq(packingItems.is_packed, true)))
       .returning({ id: packingItems.id });
+    if (rows.length) await safely(tx, "reminder_sync_trip", (inner) => syncTrip(inner, tripId));
     return rows.length;
   });
 }
@@ -1956,6 +2046,109 @@ export async function applyPackingStarter(
   return db.transaction(async (tx): Promise<PackingMergeResult> => {
     if (!(await ownedTrip(tx, ownerId, tripId, true))) return { ok: false, reason: "not_found" };
     return mergeIntoTrip(tx, ownerId, tripId, starterSource(keys));
+  });
+}
+
+
+export type BabyImportResult =
+  | { ok: true; added: number; matched: number; updated: number; skipped: number }
+  | { ok: false; reason: "not_found" };
+
+/**
+ * Import Arjun's packing list. The plan is recomputed here from the stored
+ * rows (the browser's preview is never trusted); the caller only says which
+ * source keys it accepted: quantity changes and "add anyway" items. Everything
+ * else that exists is left exactly as it is — packed state, notes, assignments.
+ * Re-running adds nothing (stable keys + a unique index on (trip, key)).
+ */
+export async function importBabyPacking(
+  db: Db,
+  ownerId: OwnerId,
+  tripId: string,
+  accepted: { quantities: string[]; addAnyway: string[] },
+): Promise<BabyImportResult> {
+  return db.transaction(async (tx): Promise<BabyImportResult> => {
+    if (!(await ownedTrip(tx, ownerId, tripId, true))) return { ok: false, reason: "not_found" };
+    const inTrip = (t: typeof packingCategories | typeof packingItems) => and(eq(t.trip_id, tripId), eq(t.owner_id, ownerId));
+    const [categories, items] = await Promise.all([
+      tx.select().from(packingCategories).where(inTrip(packingCategories)),
+      tx.select().from(packingItems).where(inTrip(packingItems)),
+    ]);
+    const plan: PlanEntry[] = planBabyImport(categories.map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id) })));
+    const quantities = new Set(accepted.quantities);
+    const addAnyway = new Set(accepted.addAnyway);
+
+    const categoryIds = new Map(categories.map((c) => [normalizeName(c.name), c.id]));
+    let categoryOrder = Math.max(0, ...categories.map((c) => c.sort_order));
+    const itemOrder = new Map<string, number>();
+    const categoryFor = async (name: string) => {
+      let id = categoryIds.get(normalizeName(name));
+      if (!id) {
+        [{ id }] = await tx
+          .insert(packingCategories)
+          .values({ name, sort_order: ++categoryOrder, trip_id: tripId, owner_id: ownerId })
+          .returning({ id: packingCategories.id });
+        categoryIds.set(normalizeName(name), id);
+      }
+      if (!itemOrder.has(id)) itemOrder.set(id, Math.max(0, ...items.filter((i) => i.category_id === id).map((i) => i.sort_order)));
+      return id;
+    };
+    const itemWhere = (id: string) => and(eq(packingItems.id, id), eq(packingItems.trip_id, tripId), eq(packingItems.owner_id, ownerId));
+
+    let added = 0;
+    let matched = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const entry of plan) {
+      const { item } = entry;
+      if (entry.status === "new" || (entry.status === "ambiguous" && addAnyway.has(item.key))) {
+        const categoryId = await categoryFor(item.category);
+        const order = itemOrder.get(categoryId)! + 1;
+        const rows = await tx
+          .insert(packingItems)
+          .values({
+            category_id: categoryId,
+            label: item.label,
+            quantity: item.quantity,
+            quantity_text: item.quantityText,
+            source_key: item.key,
+            traveler_name: item.traveler,
+            notes: item.notes,
+            is_packed: false,
+            sort_order: order,
+            trip_id: tripId,
+            owner_id: ownerId,
+          })
+          .onConflictDoNothing()
+          .returning({ id: packingItems.id });
+        if (rows.length) {
+          itemOrder.set(categoryId, order);
+          added++;
+        } else {
+          matched++; // a concurrent import got there first
+        }
+      } else if (entry.status === "ambiguous") {
+        skipped++;
+      } else if (entry.status === "match") {
+        // Only record the key on a row that doesn't have one; nothing else is touched.
+        if (entry.adopt) await tx.update(packingItems).set({ source_key: item.key }).where(and(itemWhere(entry.existingId), isNull(packingItems.source_key)));
+        matched++;
+      } else if (quantities.has(item.key)) {
+        await tx
+          .update(packingItems)
+          .set({
+            quantity: item.quantity,
+            quantity_text: item.quantityText,
+            ...(entry.adopt ? { source_key: item.key } : {}),
+          })
+          .where(itemWhere(entry.existingId));
+        updated++;
+      } else {
+        if (entry.adopt) await tx.update(packingItems).set({ source_key: item.key }).where(and(itemWhere(entry.existingId), isNull(packingItems.source_key)));
+        skipped++;
+      }
+    }
+    return { ok: true, added, matched, updated, skipped };
   });
 }
 

@@ -2,6 +2,7 @@ import { formatTime } from "@/lib/dates";
 import { formatRange, roundTrip, type MinuteRange } from "@/lib/recommendations";
 import { agendaTitle, buildAgenda, entryInstant, type AgendaEntry } from "@/lib/schedule";
 import { zonedInstant } from "@/lib/time-zones";
+import type { Clock } from "@/lib/settings";
 import type { ItineraryEntry, Reservation } from "@/lib/types";
 
 /**
@@ -38,6 +39,8 @@ export type OutingContext = {
   timeZone: string;
   items: ItineraryEntry[];
   reservations: Reservation[];
+  /** How times are written in the notices (presentation only). Defaults to 12-hour. */
+  clock?: Clock;
 };
 
 export type OutingNoticeCode =
@@ -71,14 +74,14 @@ const toMinutes = (time: string) => {
 };
 
 /** "12:30 PM" for a minute-of-day, clamped to the day. */
-const clock = (minutes: number) => {
+const clockOf = (minutes: number, pref: Clock) => {
   const m = Math.max(0, Math.min(23 * 60 + 59, minutes));
-  return formatTime(`${Math.floor(m / 60)}:${m % 60}`);
+  return formatTime(`${Math.floor(m / 60)}:${m % 60}`, pref);
 };
 
 type Span = { title: string; start: number; end: number; label: string; rest: boolean; spa: boolean };
 
-function spansFor(entries: AgendaEntry[]): Span[] {
+function spansFor(entries: AgendaEntry[], pref: Clock): Span[] {
   const spans: Span[] = [];
   for (const e of entries) {
     if (!e.time || e.cancelled || e.item?.status === "skipped") continue;
@@ -93,8 +96,8 @@ function spansFor(entries: AgendaEntry[]): Span[] {
     }
     const label =
       end > start && e.role === "single" && e.schedule.endTime
-        ? `${formatTime(e.time)}–${formatTime(e.schedule.endTime)}`
-        : formatTime(e.time);
+        ? `${formatTime(e.time, pref)}–${formatTime(e.schedule.endTime, pref)}`
+        : formatTime(e.time, pref);
     spans.push({
       title: agendaTitle(e),
       start,
@@ -115,6 +118,7 @@ function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number) {
 }
 
 export function checkOuting(p: OutingProposal, ctx: OutingContext): OutingNotice[] {
+  const pref = ctx.clock ?? "12h";
   const notices: OutingNotice[] = [];
   const drive = p.drive;
 
@@ -154,7 +158,7 @@ export function checkOuting(p: OutingProposal, ctx: OutingContext): OutingNotice
 
   const agenda = buildAgenda({ items: ctx.items, reservations: ctx.reservations, tripStart: ctx.tripStart, tripEnd: ctx.tripEnd });
   const day = [...agenda.days, ...agenda.outside].find((d) => d.date === p.date);
-  const spans = spansFor(day?.entries ?? []);
+  const spans = spansFor(day?.entries ?? [], pref);
 
   if (!p.start) {
     if (spans.length) {
@@ -172,7 +176,7 @@ export function checkOuting(p: OutingProposal, ctx: OutingContext): OutingNotice
   const leave = visitStart - each * MIN;
   const back = visitEnd + each * MIN;
   const windowText = each
-    ? `Leaving about ${clock(startMin - each)} and back about ${clock(endMin + each)}, with up to ${each} min of driving each way (est.).`
+    ? `Leaving about ${clockOf(startMin - each, pref)} and back about ${clockOf(endMin + each, pref)}, with up to ${each} min of driving each way (est.).`
     : undefined;
 
   // Airport logistics, from the trip's own flights (cancelled ones ignored).
@@ -185,7 +189,7 @@ export function checkOuting(p: OutingProposal, ctx: OutingContext): OutingNotice
         notices.push({
           code: "arrival_buffer",
           level: "warning",
-          title: `Too soon after landing at ${formatTime(f.end_time)}.`,
+          title: `Too soon after landing at ${formatTime(f.end_time, pref)}.`,
           detail: "The plan allows about 3 hours for immigration, baggage, the rental car and getting to the condo.",
           confirm: true,
         });
@@ -197,7 +201,7 @@ export function checkOuting(p: OutingProposal, ctx: OutingContext): OutingNotice
         notices.push({
           code: "departure_buffer",
           level: "warning",
-          title: `Runs into the ${formatTime(f.start_time)} departure.`,
+          title: `Runs into the ${formatTime(f.start_time, pref)} departure.`,
           detail: "The plan has you checking out about 5 hours before the flight to return the car and reach the airport 3 hours early.",
           confirm: true,
         });

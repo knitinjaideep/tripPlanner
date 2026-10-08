@@ -1,12 +1,25 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { getDb, type Db } from "@/db";
 import * as q from "@/db/queries";
+import * as notif from "@/db/notifications";
+import * as eveningDb from "@/db/evening-preview";
+import * as reminderDb from "@/db/reminders";
+import * as pollDb from "@/db/polls";
 import * as sharing from "@/db/sharing";
-import { getCurrentUser } from "@/lib/user";
+import * as settingsDb from "@/db/settings";
+import { getCurrentUser, initialsFrom, type CurrentUser } from "@/lib/user";
+import { availableBackgrounds } from "@/lib/background-assets";
+import { defaultDisplayPreferences, type SettingsSection, type SettingsSnapshot, type BackgroundId, type EveningPreviewSchedule } from "@/lib/settings";
 import type { TripContext } from "@/db/sharing";
 import { decideInvitePage, type InvitePage } from "@/lib/invite-page";
+import { actionLabel, sampleTarget } from "@/lib/evening-preview";
+import { createPreviewSender } from "@/lib/email/evening-email";
+import { createReminderSender } from "@/lib/email/reminder-email";
+import { type PresetChoice, type ReminderSubject, type RuleInput } from "@/lib/reminders";
+import { getEmailConfig } from "@/lib/email/invitation-email";
+import { type NotificationFilter, type NotificationItem, type NotificationPage } from "@/lib/notifications";
 import {
   ForbiddenError,
   TOKEN_PATTERN,
@@ -71,8 +84,23 @@ export class AuthRequiredError extends Error {
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  return user;
+  return withLocalName(user);
 }
+
+/**
+ * The person's Atlas-only display name (Settings → Account), when they set one,
+ * replaces the Google name everywhere Atlas shows it. Only the name changes —
+ * email and photo stay the Google account's. If Settings can't be read the
+ * Google name is used: a name lookup never takes a page down.
+ */
+const withLocalName = cache(async (user: CurrentUser): Promise<CurrentUser> => {
+  try {
+    const name = await settingsDb.displayNameOverride(getDb(), user.id);
+    return name ? { ...user, displayName: name, firstName: name.split(/\s+/)[0], initials: initialsFrom(name) } : user;
+  } catch {
+    return user;
+  }
+});
 
 /** For mutations: the verified user ID, or AuthRequiredError. */
 async function requireUserId() {
@@ -115,6 +143,15 @@ async function withTripWrite<T, F>(
 /** Owner, or an editor: add / change / delete planning content. */
 const editTrip = <T, F>(tripId: string, fallback: F, fn: (db: Db, ctx: TripContext) => Promise<T>) =>
   withTripWrite(tripId, "contribute", fallback, fn);
+
+/**
+ * Any current member, viewers included: answer a poll, and (with an organizer
+ * check inside the query) close / cancel / decide the polls they asked. This
+ * is a narrow participation permission — it never reaches the itinerary or any
+ * other trip data, which still go through editTrip / ownTrip.
+ */
+const participateTrip = <T, F>(tripId: string, fallback: F, fn: (db: Db, ctx: TripContext) => Promise<T>) =>
+  withTripWrite(tripId, "participate", fallback, fn);
 
 /** Owner only: trip settings, deletion, invitations, members. */
 const ownTrip = <T, F>(tripId: string, fallback: F, fn: (db: Db, ctx: TripContext) => Promise<T>) =>
@@ -303,6 +340,29 @@ export async function importExploreCollectionForUser(tripId: string, collectionI
 
 /* ----------------------------- itinerary -------------------------- */
 
+/**
+ * Itinerary writes tell the rest of the trip about meaningful changes (an
+ * activity added, removed, rescheduled, or given another place) — see
+ * `withItineraryAnnouncement`. The actor is never notified.
+ */
+async function announcingItinerary<R>(
+  db: Db,
+  ctx: TripContext,
+  tripId: string,
+  kind: "added" | "removed" | "changed",
+  itemId: string | null,
+  write: () => Promise<R>,
+  outcome: (result: R) => { ok: boolean; id?: string },
+): Promise<R> {
+  const user = await getCurrentUser();
+  return notif.withItineraryAnnouncement(
+    db,
+    { ownerId: ctx.ownerId, tripId, actorId: ctx.userId, actorName: user?.displayName ?? "", kind, itemId },
+    write,
+    outcome,
+  );
+}
+
 /** Every visit with its place and booking; null = no access. */
 export const getItineraryForUser = cache(async (tripId: string) => {
   return readTrip(tripId, null, (db, ctx) => q.listItinerary(db, ctx.ownerId, tripId));
@@ -314,7 +374,12 @@ export async function createItineraryItemForUser(
   options: q.ItineraryWriteOptions = {},
 ) {
   if (options.requestId !== undefined && !isId(options.requestId)) return editTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
-  return editTrip(tripId, NOT_FOUND, (db, ctx) => q.createItineraryItem(db, ctx.ownerId, tripId, input, options));
+  return editTrip(tripId, NOT_FOUND, (db, ctx) => {
+    const write = () => q.createItineraryItem(db, ctx.ownerId, tripId, input, options);
+    // A "Capture a moment" entry is a memory of something done, not a plan change.
+    if (options.completed) return write();
+    return announcingItinerary(db, ctx, tripId, "added", null, write, (r) => ({ ok: r.ok, id: r.ok ? r.id : undefined }));
+  });
 }
 
 export async function updateItineraryItemForUser(
@@ -324,7 +389,9 @@ export async function updateItineraryItemForUser(
   options: Pick<q.ItineraryWriteOptions, "saveToExplore"> & { expectedUpdatedAt?: string } = {},
 ) {
   if (!isId(itemId)) return editTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
-  return editTrip(tripId, NOT_FOUND, (db, ctx) => q.updateItineraryItem(db, ctx.ownerId, tripId, itemId, input, options));
+  return editTrip(tripId, NOT_FOUND, (db, ctx) =>
+    announcingItinerary(db, ctx, tripId, "changed", itemId, () => q.updateItineraryItem(db, ctx.ownerId, tripId, itemId, input, options), (r) => ({ ok: r.ok })),
+  );
 }
 
 /** Only the given review fields change. */
@@ -335,17 +402,23 @@ export async function reviewItineraryItemForUser(tripId: string, itemId: string,
 
 export async function deleteItineraryItemForUser(tripId: string, itemId: string) {
   if (!isId(itemId)) return editTrip(tripId, false, async () => false);
-  return editTrip(tripId, false, (db, ctx) => q.deleteItineraryItem(db, ctx.ownerId, tripId, itemId));
+  return editTrip(tripId, false, (db, ctx) =>
+    announcingItinerary(db, ctx, tripId, "removed", itemId, () => q.deleteItineraryItem(db, ctx.ownerId, tripId, itemId), (ok) => ({ ok })),
+  );
 }
 
 export async function moveItineraryItemForUser(tripId: string, itemId: string, date: string) {
   if (!isId(itemId)) return editTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
-  return editTrip(tripId, NOT_FOUND, (db, ctx) => q.moveItineraryItem(db, ctx.ownerId, tripId, itemId, date));
+  return editTrip(tripId, NOT_FOUND, (db, ctx) =>
+    announcingItinerary(db, ctx, tripId, "changed", itemId, () => q.moveItineraryItem(db, ctx.ownerId, tripId, itemId, date), (r) => ({ ok: r.ok })),
+  );
 }
 
 export async function duplicateItineraryItemForUser(tripId: string, itemId: string) {
   if (!isId(itemId)) return editTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
-  return editTrip(tripId, NOT_FOUND, (db, ctx) => q.duplicateItineraryItem(db, ctx.ownerId, tripId, itemId));
+  return editTrip(tripId, NOT_FOUND, (db, ctx) =>
+    announcingItinerary(db, ctx, tripId, "added", null, () => q.duplicateItineraryItem(db, ctx.ownerId, tripId, itemId), (r) => ({ ok: r.ok, id: r.ok ? r.id : undefined })),
+  );
 }
 
 export async function reorderItineraryForUser(tripId: string, keys: { type: "item" | "reservation"; id: string }[]) {
@@ -467,6 +540,10 @@ export async function applyPackingStarterForUser(tripId: string, keys: StarterKe
   return editTrip(tripId, NOT_FOUND, (db, ctx) => q.applyPackingStarter(db, ctx.ownerId, tripId, keys));
 }
 
+export async function importBabyPackingForUser(tripId: string, accepted: { quantities: string[]; addAnyway: string[] }) {
+  return editTrip(tripId, NOT_FOUND, (db, ctx) => q.importBabyPacking(db, ctx.ownerId, tripId, accepted));
+}
+
 /**
  * The owner's OTHER trips with their lists, for "Copy from another trip".
  * Only the owner is offered them: an editor must never reach trips that
@@ -572,7 +649,7 @@ export async function createInvitationForUser(tripId: string, input: { email: st
   const user = await requireUser();
   return ownTrip(tripId, { ok: false, reason: "not_found" } as InviteOutcome, async (db, ctx) => {
     await sharing.upsertProfile(db, { id: user.id, name: user.displayName, email: user.email ? normalizeEmail(user.email) : null });
-    return sharing.createInvitation(db, {
+    const outcome = await sharing.createInvitation(db, {
       ownerId: ctx.ownerId,
       tripId,
       invitedBy: ctx.userId,
@@ -580,6 +657,18 @@ export async function createInvitationForUser(tripId: string, input: { email: st
       email: input.email,
       role: input.role,
     });
+    if (outcome.ok && outcome.email) {
+      await notif.announceInvitationCreated(db, {
+        ownerId: ctx.ownerId,
+        tripId,
+        inviterId: ctx.userId,
+        inviterName: user.displayName,
+        invitationId: outcome.id,
+        email: outcome.email,
+        role: outcome.role,
+      });
+    }
+    return outcome;
   });
 }
 
@@ -655,6 +744,7 @@ export async function acceptInvitationForUser(token: string): Promise<sharing.Ac
   const result = await sharing.acceptInvitation(getDb(), {
     tokenHash: sharing.hashInviteToken(token),
     userId: user.id,
+    userName: user.displayName,
     verifiedEmail: user.emailVerified && user.email ? normalizeEmail(user.email) : null,
     emailUnverified: !user.emailVerified,
   });
@@ -662,4 +752,389 @@ export async function acceptInvitationForUser(token: string): Promise<sharing.Ac
     await sharing.upsertProfile(getDb(), { id: user.id, name: user.displayName, email: user.email ? normalizeEmail(user.email) : null });
   }
   return result;
+}
+
+/* ------------------- invitation page by id (from the inbox) ------------------- */
+
+/**
+ * The invitation page for a signed-in invitee reached from a notification:
+ * the invitation id stands in for the raw token, which the inbox never sees.
+ * Only an email-bound invitation whose address matches the viewer's VERIFIED
+ * email (or one they already belong to) is shown; any other id looks exactly
+ * like an unknown one.
+ */
+export async function getInvitePageByIdForUser(invitationId: string): Promise<InvitePage> {
+  const user = await getCurrentUser();
+  if (!user) return { kind: "signed_out" };
+  if (!isId(invitationId)) return { kind: "invalid" };
+  const db = getDb();
+  const preview = await sharing.previewInvitationById(db, invitationId);
+  if (!preview) return { kind: "invalid" };
+  const isMember = Boolean(await sharing.resolveTripAccess(db, user.id, preview.trip.id));
+  const verified = user.emailVerified && user.email ? normalizeEmail(user.email) : null;
+  const theirs =
+    isMember ||
+    preview.owner_id === user.id ||
+    preview.accepted_by === user.id ||
+    (preview.email_bound && verified !== null && verified === preview.email);
+  if (!theirs) return { kind: "invalid" };
+  return decideInvitePage(preview, user, isMember);
+}
+
+/** Explicit acceptance from the invitation page opened via the inbox. Email-bound invitations only. */
+export async function acceptInvitationByIdForUser(invitationId: string): Promise<sharing.AcceptResult> {
+  const user = await requireUser();
+  if (!isId(invitationId)) return { status: "invalid" };
+  const result = await sharing.acceptInvitation(getDb(), {
+    invitationId,
+    userId: user.id,
+    userName: user.displayName,
+    verifiedEmail: user.emailVerified && user.email ? normalizeEmail(user.email) : null,
+    emailUnverified: !user.emailVerified,
+  });
+  if (result.status === "ok" || result.status === "accepted_by_you" || result.status === "already_member") {
+    await sharing.upsertProfile(getDb(), { id: user.id, name: user.displayName, email: user.email ? normalizeEmail(user.email) : null });
+  }
+  return result;
+}
+
+/* ------------------------------ notifications ------------------------------ */
+
+export type { NotificationFilter, NotificationItem, NotificationPage };
+
+/** The verified user, or AuthRequiredError (route handlers and actions answer 401 / "sign in again" rather than redirect). */
+async function requireSessionUser() {
+  const user = await getCurrentUser();
+  if (!user) throw new AuthRequiredError();
+  return user;
+}
+
+const viewerOf = (user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>): notif.Viewer => ({
+  id: user.id,
+  verifiedEmail: user.emailVerified && user.email ? normalizeEmail(user.email) : null,
+});
+
+/** Remember (at most every 10 minutes per server process) who this account is, so invitations to their email can find them. */
+const profileSeen = new Map<string, number>();
+async function rememberProfile(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
+  const last = profileSeen.get(user.id) ?? 0;
+  if (Date.now() - last < 10 * 60_000) return;
+  profileSeen.set(user.id, Date.now());
+  if (profileSeen.size > 5000) profileSeen.clear();
+  await sharing.upsertProfile(getDb(), { id: user.id, name: user.displayName, email: user.email ? normalizeEmail(user.email) : null });
+}
+
+/**
+ * After a verified sign-in the inbox quietly picks up open invitations
+ * addressed to the person's verified email (they had no account when it was
+ * sent). Creates notifications only; it never accepts anything.
+ */
+async function reconcile(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
+  try {
+    if (user.emailVerified) await rememberProfile(user);
+    await notif.reconcileInvitationNotifications(getDb(), viewerOf(user));
+  } catch (error) {
+    console.error("[rove] invitation reconcile failed:", (error as Error)?.name);
+  }
+}
+
+/** The bell: unread items the person can still open, plus a marker that changes when anything new arrives. */
+export async function getNotificationSummaryForUser() {
+  const user = await requireSessionUser();
+  await reconcile(user);
+  return notif.countUnread(getDb(), viewerOf(user));
+}
+
+export async function listNotificationsForUser(opts: { filter?: NotificationFilter; cursor?: string | null; limit?: number } = {}) {
+  const user = await requireSessionUser();
+  await reconcile(user);
+  const page = await notif.listNotifications(getDb(), viewerOf(user), opts);
+  return { ...page, items: await withReminderActions(user.id, page.items) };
+}
+
+/** Reminder items get what the person may do NOW (re-derived from live data), so an old item never offers a stale action. */
+async function withReminderActions(userId: string, items: NotificationItem[]): Promise<NotificationItem[]> {
+  const mine = items.filter((i) => i.available && i.reminder);
+  if (mine.length === 0) return items;
+  const db = getDb();
+  const roles = new Map<string, "owner" | "editor" | "viewer" | null>();
+  const role = async (tripId: string) => {
+    if (!roles.has(tripId)) roles.set(tripId, (await sharing.resolveTripAccess(db, userId, tripId))?.role ?? null);
+    return roles.get(tripId)!;
+  };
+  const live = await reminderDb.inboxActions(db, userId, mine.map((i) => ({ reminderId: i.reminder!.reminderId, occurrence: i.reminder!.occurrence })), role);
+  return items.map((i) => {
+    if (!i.reminder) return i;
+    const l = live.get(i.reminder.reminderId);
+    return { ...i, reminder: { ...i.reminder, live: l ? { canComplete: l.canComplete, taskDone: l.taskDone, canSnooze: l.canSnooze, snoozeOptions: l.snoozeOptions, directionsUrl: l.directionsUrl, zoneName: l.zoneName, zone: l.zone, limitAtMs: l.limitAtMs, superseded: l.superseded } : null } };
+  });
+}
+
+/** Opening an item: marks just that one read and returns it with its (re-checked) destination. null = not theirs. */
+export async function openNotificationForUser(notificationId: string) {
+  const user = await requireSessionUser();
+  const viewer = viewerOf(user);
+  const db = getDb();
+  const item = await notif.getNotification(db, viewer, notificationId);
+  if (!item) return null;
+  await notif.markRead(db, viewer, notificationId);
+  const [withActions] = await withReminderActions(user.id, [item]);
+  return { ...withActions, read_at: item.read_at ?? new Date().toISOString() };
+}
+
+export async function markNotificationReadForUser(notificationId: string) {
+  const user = await requireSessionUser();
+  return notif.markRead(getDb(), viewerOf(user), notificationId);
+}
+
+export async function markAllNotificationsReadForUser(upTo?: string | null) {
+  const user = await requireSessionUser();
+  return notif.markAllRead(getDb(), viewerOf(user), upTo);
+}
+
+
+/* ------------------------------- polls ------------------------------- */
+
+export type { PollInput, PollWriteReason } from "@/db/polls";
+export type { PollView } from "@/lib/polls";
+
+/** Every poll of the trip with totals, who voted (current members) and what the caller may do; null = no access. */
+export const getPollsForUser = cache(async (tripId: string) => {
+  return readTrip(tripId, null, (db, ctx) => pollDb.listPolls(db, ctx, tripId));
+});
+
+/** Owners and editors ask the group. */
+export async function createPollForUser(tripId: string, input: pollDb.PollInput) {
+  const user = await requireUser();
+  if (input.replaces_poll_id !== null && !isId(input.replaces_poll_id)) return editTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return editTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.createPoll(db, ctx, tripId, input, user.displayName));
+}
+
+export async function updatePollForUser(tripId: string, pollId: string, input: pollDb.PollInput) {
+  const user = await requireUser();
+  if (!isId(pollId)) return participateTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return participateTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.updatePoll(db, ctx, tripId, pollId, input, user.displayName));
+}
+
+/** Any current member who was asked — viewers too. Nothing else on the trip changes. */
+export async function castVoteForUser(tripId: string, pollId: string, response: pollDb.VoteResponse) {
+  if (!isId(pollId) || ("option_id" in response && !isId(response.option_id))) return participateTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return participateTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.castVote(db, ctx, tripId, pollId, response));
+}
+
+export async function closePollForUser(tripId: string, pollId: string) {
+  if (!isId(pollId)) return participateTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return participateTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.closePoll(db, ctx, tripId, pollId));
+}
+
+export async function cancelPollForUser(tripId: string, pollId: string) {
+  if (!isId(pollId)) return participateTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return participateTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.cancelPoll(db, ctx, tripId, pollId));
+}
+
+/** The organizer's explicit decision. Adds nothing to the itinerary. */
+export async function chooseResultForUser(tripId: string, pollId: string, optionId: string) {
+  const user = await requireUser();
+  if (!isId(pollId) || !isId(optionId)) return participateTrip(tripId, NOT_FOUND, async () => NOT_FOUND);
+  return participateTrip(tripId, NOT_FOUND, (db, ctx) => pollDb.chooseResult(db, ctx, tripId, pollId, optionId, user.displayName));
+}
+
+/* ------------------------- evening preview ------------------------- */
+
+export type { RunReport as EveningRunReport } from "@/db/evening-preview";
+
+/**
+ * The caller's own evening-preview settings for a trip, what the preview
+ * would look like (a sample from the saved plan — nothing is sent), whether
+ * email can work for them, and whether the scheduled job has really run.
+ */
+export const getEveningPreviewSettingsForUser = cache(async (tripId: string) => {
+  return readTrip(tripId, null, async (db, ctx) => {
+    const trip = await q.getTripWithDetails(db, ctx.ownerId, tripId);
+    if (!trip) return null;
+    const now = new Date();
+    const target = sampleTarget(now, trip.time_zone, trip.start_date, trip.end_date);
+    const [prefs, address, scheduler, sample] = await Promise.all([
+      eveningDb.getPrefs(db, tripId, ctx.userId),
+      eveningDb.profileEmail(db, ctx.userId),
+      eveningDb.schedulerStatus(db, now),
+      target ? eveningDb.buildPreview(db, tripId, ctx.userId, target.date, now) : Promise.resolve(null),
+    ]);
+    return {
+      prefs,
+      timeZone: trip.time_zone,
+      sample: sample ? { ...sample, isTomorrow: target!.isTomorrow, action: actionLabel(sample) } : null,
+      email: { providerConfigured: getEmailConfig() !== null, hasAddress: Boolean(address) },
+      scheduler,
+    };
+  });
+});
+
+/** Any member sets their own preference — private to them, and it changes nothing else on the trip. */
+export async function saveEveningPrefsForUser(tripId: string, input: eveningDb.PrefsInput) {
+  return withTripWrite(tripId, "read", false, (db, ctx) => eveningDb.savePrefs(db, ctx.ownerId, tripId, ctx.userId, input));
+}
+
+/**
+ * The scheduled job's entry point. It has NO user session by design — it is
+ * reached only from the cron route, which authenticates the caller with a
+ * server secret — and acts for each opted-in person after re-checking their
+ * membership and preferences. `dryRun` composes but writes and sends nothing.
+ */
+export async function runEveningPreviewJob(opts: { dryRun?: boolean; now?: Date; only?: { tripId?: string; userId?: string } } = {}) {
+  return eveningDb.runEveningPreviews(getDb(), { ...opts, email: opts.dryRun ? null : createPreviewSender(), });
+}
+
+
+/* ------------------------------ reminders ------------------------------ */
+
+export type { ReminderPanel, OverviewRow, ReminderPrefs } from "@/db/reminders";
+
+/** Everyone on the trip, by name only — for the task assignee picker. Any member may read it. null = no access. */
+export const getTripPeopleForUser = cache(async (tripId: string) => {
+  return readTrip(tripId, null, (db, ctx) => reminderDb.tripPeopleChoices(db, tripId, ctx.userId));
+});
+export type { RunReport as ReminderRunReport } from "@/db/reminders";
+
+/**
+ * Everything the reminder control needs for one booking or task: the record's
+ * time and zone, who may receive a reminder, what is set up and where each one
+ * stands. Any member may read it (names only, no emails). null = no access.
+ */
+export async function getReminderPanelForUser(tripId: string, type: ReminderSubject, id: string) {
+  if (!isId(id)) return null;
+  return readTrip(tripId, null, (db, ctx) => reminderDb.getPanel(db, ctx.userId, ctx.ownerId, tripId, type, id, getEmailConfig() !== null));
+}
+
+/** Owners and editors only (the same permission as editing the record): what a setup would do, writing nothing. */
+export async function previewRemindersForUser(tripId: string, type: ReminderSubject, id: string, input: { preset: PresetChoice; rule: Omit<RuleInput, "preset">; recipientIds: string[] }) {
+  if (!isId(id) || input.recipientIds.some((r) => r.length > 255)) return null;
+  return editTrip(tripId, null, (db, ctx) => reminderDb.previewReminders(db, ctx, tripId, type, id, input));
+}
+
+/** Owners and editors: set up, change or turn off the reminder(s) of one booking or task. Nothing is created unless this is called. */
+export async function setRemindersForUser(tripId: string, type: ReminderSubject, id: string, input: reminderDb.SetupInput) {
+  const notFound = { ok: false, reason: "not_found" } as reminderDb.SetupResult;
+  if (!isId(id)) return editTrip(tripId, notFound, async () => notFound);
+  return editTrip(tripId, notFound, (db, ctx) => reminderDb.setReminders(db, ctx, tripId, type, id, input));
+}
+
+/** The review list: reminder-eligible bookings and tasks and whether anything is set up. Read-only. */
+export const getReminderOverviewForUser = cache(async (tripId: string) => {
+  return readTrip(tripId, null, (db, ctx) => reminderDb.getOverview(db, ctx.ownerId, tripId));
+});
+
+/**
+ * The recipient's own actions. Any current member may act on THEIR OWN
+ * reminder (a viewer can snooze the reminder addressed to them, which changes
+ * nothing about the trip); someone else's reminder id is "not found".
+ */
+export async function snoozeReminderForUser(tripId: string, reminderId: string, atMs: number) {
+  const notFound = { ok: false, reason: "not_found" } as reminderDb.OwnReminderResult;
+  if (!isId(reminderId)) return notFound;
+  return withTripWrite(tripId, "read", notFound, (db, ctx) => reminderDb.snoozeReminder(db, ctx.userId, reminderId, atMs));
+}
+
+export async function muteReminderForUser(tripId: string, reminderId: string) {
+  const notFound = { ok: false, reason: "not_found" } as reminderDb.OwnReminderResult;
+  if (!isId(reminderId)) return notFound;
+  return withTripWrite(tripId, "read", notFound, (db, ctx) => reminderDb.muteReminder(db, ctx.userId, reminderId));
+}
+
+export async function allowQuietReminderForUser(tripId: string, reminderId: string) {
+  const notFound = { ok: false, reason: "not_found" } as reminderDb.OwnReminderResult;
+  if (!isId(reminderId)) return notFound;
+  return withTripWrite(tripId, "read", notFound, (db, ctx) => reminderDb.allowQuietReminder(db, ctx.userId, reminderId));
+}
+
+/** The caller's own delivery settings (all trips) and whether email can work for them. */
+export const getReminderPrefsForUser = cache(async () => {
+  const user = await requireUser();
+  const db = getDb();
+  const [prefs, address, scheduler] = await Promise.all([reminderDb.getPrefs(db, user.id), reminderDb.profileEmail(db, user.id), reminderDb.schedulerStatus(db)]);
+  return { prefs, email: { providerConfigured: getEmailConfig() !== null, hasAddress: Boolean(address) }, scheduler };
+});
+
+export async function saveReminderPrefsForUser(input: reminderDb.ReminderPrefs) {
+  const userId = await requireUserId();
+  return reminderDb.savePrefs(getDb(), userId, input);
+}
+
+/**
+ * The scheduled job's entry point. It has NO user session by design — it is
+ * reached only from the cron route, which authenticates the caller with a
+ * server secret — and acts for each recipient after re-checking the record,
+ * their membership and their preferences. `dryRun` writes and sends nothing.
+ */
+export async function runReminderJob(opts: { dryRun?: boolean; now?: Date } = {}) {
+  return reminderDb.runReminders(getDb(), { ...opts, email: opts.dryRun ? null : createReminderSender() });
+}
+
+
+/* ------------------------------- settings ------------------------------- */
+
+export type SettingsView = {
+  snapshot: SettingsSnapshot;
+  /** Backgrounds whose pictures exist on this server (Plain Ivory is always there). */
+  available: BackgroundId[];
+  /** Read-only: the trips where this person turned evening previews on, with their trip-specific send time. */
+  eveningPreviews: EveningPreviewSchedule[];
+};
+
+/** The signed-in user's own settings. Never takes a user id: it is always the verified session user. */
+export const getSettingsForUser = cache(async (): Promise<SettingsView> => {
+  const user = await requireUser();
+  const available = await availableBackgrounds();
+  const db = getDb();
+  const [snapshot, eveningPreviews] = await Promise.all([settingsDb.readSettings(db, user.id, available), settingsDb.eveningPreviewSchedules(db, user.id)]);
+  return { snapshot, available, eveningPreviews };
+});
+
+/** Display preferences for server-rendered text (times). Falls back to the defaults: formatting never takes a page down. */
+export const getDisplayPrefsForUser = cache(async () => {
+  await requireUser();
+  try {
+    return (await getSettingsForUser()).snapshot.display;
+  } catch (error) {
+    unstable_rethrow(error);
+    return defaultDisplayPreferences();
+  }
+});
+
+/** Merge `patch` (already validated) into one section of the caller's own settings; returns what was stored. */
+export async function saveSettingsSectionForUser(section: SettingsSection, patch: Record<string, unknown>) {
+  const userId = await requireUserId();
+  await settingsDb.saveSection(getDb(), userId, section, patch, reminderDb.syncRecipient);
+  return settingsDb.readSettings(getDb(), userId, await availableBackgrounds());
+}
+
+export type AppearanceSaveResult =
+  | { ok: true; appearance: SettingsSnapshot["appearance"]; version: number }
+  | { ok: false; conflict: true; appearance: SettingsSnapshot["appearance"]; version: number };
+
+/**
+ * Save appearance fields for the caller (verified session user, never a parameter),
+ * based on `expectedVersion`. A newer save from another device returns the stored
+ * appearance as a conflict instead of overwriting it.
+ */
+export async function saveAppearanceForUser(patch: Record<string, unknown>, expectedVersion: number): Promise<AppearanceSaveResult> {
+  const userId = await requireUserId();
+  const db = getDb();
+  const available = await availableBackgrounds();
+  const result = await settingsDb.saveAppearance(db, userId, patch, expectedVersion, available);
+  if (result.ok) return result;
+  return { ok: false, conflict: true, ...(await settingsDb.readAppearance(db, userId, available)) };
+}
+
+/** The caller's saved appearance and its version (focus refresh). */
+export async function getAppearanceForUser() {
+  const userId = await requireUserId();
+  return settingsDb.readAppearance(getDb(), userId, await availableBackgrounds());
+}
+
+/** Set or clear (null) the caller's Atlas-only display name; returns the stored override. */
+export async function saveDisplayNameForUser(name: string | null) {
+  const user = await getCurrentUser();
+  if (!user) throw new AuthRequiredError();
+  return settingsDb.saveDisplayName(getDb(), user.id, name, user.displayName);
 }

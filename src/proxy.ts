@@ -16,6 +16,8 @@ let authMiddleware: ((request: NextRequest) => Promise<NextResponse>) | null = n
  * again through the data access layer (src/lib/dal.ts).
  */
 export async function proxy(request: NextRequest) {
+  // The scheduler has no browser session; the route authenticates it with a server secret instead.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) return NextResponse.next();
   const auth = getAuth();
   // Without configuration, pages render setup instructions instead.
   if (!auth) return NextResponse.next();

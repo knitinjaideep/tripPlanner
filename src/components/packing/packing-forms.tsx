@@ -13,6 +13,8 @@ import {
 } from "@/components/forms/fields";
 import { ConflictGuard } from "@/components/forms/conflict";
 import { useFormAction } from "@/components/forms/use-form-action";
+import { zoneName } from "@/lib/reminders";
+import type { MemberChoice } from "@/lib/reminders";
 import type { ActionState, PackingCategory, PackingItem } from "@/lib/types";
 
 /** Add or edit one checklist row. Packed state is left alone (the checkbox owns it). */
@@ -22,6 +24,8 @@ export function PackingItemForm({
   categories,
   defaultCategoryId,
   travelers,
+  people,
+  tripTimeZone,
   onCancel,
   onSaved,
 }: {
@@ -30,6 +34,8 @@ export function PackingItemForm({
   categories: Pick<PackingCategory, "id" | "name">[];
   defaultCategoryId?: string;
   travelers: string[];
+  people: MemberChoice[];
+  tripTimeZone: string;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -102,6 +108,33 @@ export function PackingItemForm({
             <option key={t} value={t} />
           ))}
         </datalist>
+        <fieldset className="space-y-4 rounded-2xl border border-border bg-surface p-4">
+          <legend className="px-1 text-sm font-semibold text-ink">Assign &amp; due date</legend>
+          <SelectField
+            idPrefix="pi"
+            name="assignee_id"
+            label="Assigned to"
+            optional
+            defaultValue={item?.assignee_id ?? ""}
+            options={[{ value: "", label: "Nobody" }, ...people.map((p) => ({ value: p.id, label: p.isYou ? "You" : p.name }))]}
+            hint="Someone on this trip. Reminders for a task go only to the person it’s assigned to."
+            error={errors.assignee_id}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField idPrefix="pi" name="due_date" label="Due date" type="date" optional defaultValue={item?.due_date ?? ""} error={errors.due_date} />
+            <TextField
+              idPrefix="pi"
+              name="due_time"
+              label="Due time"
+              type="time"
+              optional
+              defaultValue={item?.due_time ? item.due_time.slice(0, 5) : ""}
+              hint={`In ${zoneName(item?.due_time_zone ?? tripTimeZone)}.`}
+              error={errors.due_time}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">A task isn’t given a deadline unless you set one, and nothing is sent unless you set up a reminder for it.</p>
+        </fieldset>
         <TextAreaField
           idPrefix="pi"
           name="notes"

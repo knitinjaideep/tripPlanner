@@ -145,7 +145,10 @@ async function main() {
     assert.ok(can("editor", "contribute") && can("editor", "read"));
     assert.ok(!can("editor", "manage_members") && !can("editor", "manage_trip"));
     assert.ok(can("viewer", "read") && !can("viewer", "contribute"));
-    assert.ok(!can(null, "read"));
+    // Voting in a poll is the one explicit exception: a viewer may participate, and still cannot change anything else.
+    assert.ok(can("viewer", "participate") && can("editor", "participate") && can("owner", "participate"));
+    assert.ok(!can("viewer", "contribute") && !can("viewer", "manage_trip") && !can("viewer", "manage_members"));
+    assert.ok(!can(null, "read") && !can(null, "participate"));
   });
   await check("emails are trimmed and lower-cased, with no Gmail dot or plus equivalence", () => {
     assert.equal(normalizeEmail("  Maya@Example.COM \n"), "maya@example.com");

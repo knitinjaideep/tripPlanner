@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Compass, Home, Images, Luggage, MoreHorizontal, Ticket, type LucideIcon } from "lucide-react";
+import { CalendarDays, Compass, Home, Images, Luggage, MessageCircleQuestionMark, MoreHorizontal, Ticket, type LucideIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,7 @@ export function TripBottomNav({ tripId }: { tripId: string }) {
     { label: "Explore", icon: Compass, href: `${base}/explore` },
   ];
   const more: Item[] = [
+    { label: "Ask the group", icon: MessageCircleQuestionMark, href: `${base}/polls` },
     { label: "Packing", icon: Luggage, href: `${base}/packing` },
     { label: "Memories", icon: Images, href: `${base}/memories` },
   ];

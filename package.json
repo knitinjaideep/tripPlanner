@@ -21,7 +21,17 @@
     "test:packing": "tsx scripts/test-packing.ts",
     "test:memories": "tsx scripts/test-memories.ts",
     "test:plan": "tsx scripts/test-plan.ts",
-    "test:recommendations": "tsx scripts/test-recommendations.ts"
+    "test:recommendations": "tsx scripts/test-recommendations.ts",
+    "test:notification-format": "tsx scripts/test-notification-format.ts",
+    "evening:dry-run": "tsx --conditions=react-server scripts/evening-preview-dry-run.ts",
+    "test:evening": "tsx --conditions=react-server scripts/test-evening-preview.ts",
+    "test:polls": "tsx --conditions=react-server scripts/test-polls.ts",
+    "test:notifications": "tsx --conditions=react-server scripts/test-notifications.ts",
+    "test:reminder-logic": "tsx scripts/test-reminder-logic.ts",
+    "test:appearance": "tsx scripts/test-appearance-state.ts",
+    "test:settings": "tsx --conditions=react-server scripts/test-settings.ts",
+    "test:display-format": "tsx scripts/test-display-format.ts",
+    "test:reminders": "tsx --conditions=react-server scripts/test-reminders.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.3",
@@ -52,6 +62,7 @@
     "drizzle-kit": "0.31.11",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.8",
+    "sharp": "^0.35.5",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3"

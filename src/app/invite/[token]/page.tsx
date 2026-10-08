@@ -17,5 +17,5 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   const missing = missingConfig();
   if (missing.length > 0) return <SetupNotice missing={missing} />;
   const { token } = await params;
-  return <InviteView view={await getInvitePageForUser(token)} token={token} />;
+  return <InviteView view={await getInvitePageForUser(token)} target={{ token }} />;
 }

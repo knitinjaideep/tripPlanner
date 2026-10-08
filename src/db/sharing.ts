@@ -1,8 +1,10 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./index";
-import { itineraryItems, packingItems, places, reservations, tripInvitations, tripMembers, trips, userProfiles } from "./schema";
+import { createNotifications, invitationAcceptedDraft, purgeTripNotificationsFor, safely } from "./notifications";
+import { onMemberRemoved } from "./reminders";
+import { itineraryItems, packingItems, places, reservations, tripInvitations, tripMembers, trips, userProfiles, userSettings } from "./schema";
 import {
   INVITE_CREATE_LIMIT_PER_HOUR,
   INVITE_RESEND_COOLDOWN_MS,
@@ -120,9 +122,11 @@ export async function listAccessibleTrips(db: Db, userId: string): Promise<TripL
 /* ----------------------------- profiles ---------------------------- */
 
 export async function upsertProfile(db: Executor, profile: { id: string; name: string; email: string | null }) {
+  // The person's Atlas-only display name (Settings → Account), when set, wins over the Google name.
+  const name = sql<string>`coalesce((select ${userSettings.display_name} from ${userSettings} where ${userSettings.user_id} = ${profile.id}), ${profile.name.slice(0, 120) || "Traveler"})`;
   await db
     .insert(userProfiles)
-    .values({ user_id: profile.id, display_name: profile.name.slice(0, 120) || "Traveler", email: profile.email })
+    .values({ user_id: profile.id, display_name: name, email: profile.email })
     .onConflictDoUpdate({
       target: userProfiles.user_id,
       set: { display_name: sql`excluded.display_name`, email: sql`excluded.email`, updated_at: sql`now()` },
@@ -207,6 +211,9 @@ export async function removeMember(db: Db, ownerId: string, tripId: string, memb
       .returning({ id: tripMembers.id });
     if (rows.length !== 1) return { ok: false, reason: "not_found" } as const;
     await tx.execute(sql`delete from place_member_state where trip_id = ${tripId} and user_id = ${memberUserId}`);
+    await purgeTripNotificationsFor(tx, tripId, memberUserId);
+    // Their tasks become unassigned and every reminder addressed to them on this trip is canceled.
+    await onMemberRemoved(tx, tripId, memberUserId);
     return { ok: true } as const;
   });
 }
@@ -220,6 +227,8 @@ export async function leaveTrip(db: Db, userId: string, tripId: string): Promise
       .returning({ id: tripMembers.id });
     if (rows.length === 1) {
       await tx.execute(sql`delete from place_member_state where trip_id = ${tripId} and user_id = ${userId}`);
+      await purgeTripNotificationsFor(tx, tripId, userId);
+      await onMemberRemoved(tx, tripId, userId);
     }
     return rows.length === 1;
   });
@@ -467,6 +476,7 @@ export type InvitationPreview = {
   invited_by: string;
   owner_id: string;
   email: string | null;
+  id: string;
 };
 
 /**
@@ -474,6 +484,15 @@ export type InvitationPreview = {
  * Nothing from the plan, bookings or members. null = unknown token.
  */
 export async function previewInvitation(db: Db, tokenHash: string): Promise<InvitationPreview | null> {
+  return previewWhere(db, eq(tripInvitations.token_hash, tokenHash));
+}
+
+/** The same preview addressed by invitation id — for the signed-in invitation page. The caller decides who may see it. */
+export async function previewInvitationById(db: Db, invitationId: string): Promise<InvitationPreview | null> {
+  return previewWhere(db, eq(tripInvitations.id, invitationId));
+}
+
+async function previewWhere(db: Db, where: SQL): Promise<InvitationPreview | null> {
   const [row] = await db
     .select({
       inv: tripInvitations,
@@ -484,7 +503,7 @@ export async function previewInvitation(db: Db, tokenHash: string): Promise<Invi
     })
     .from(tripInvitations)
     .innerJoin(trips, and(eq(trips.id, tripInvitations.trip_id), eq(trips.owner_id, tripInvitations.owner_id)))
-    .where(eq(tripInvitations.token_hash, tokenHash))
+    .where(where)
     .limit(1);
   if (!row) return null;
   const { inv } = row;
@@ -499,6 +518,7 @@ export async function previewInvitation(db: Db, tokenHash: string): Promise<Invi
     invited_by: inv.invited_by,
     owner_id: inv.owner_id,
     email: inv.email,
+    id: inv.id,
   };
 }
 
@@ -518,16 +538,27 @@ export type AcceptResult =
  */
 export async function acceptInvitation(
   db: Db,
-  input: { tokenHash: string; userId: string; verifiedEmail: string | null; emailUnverified: boolean },
+  input: {
+    /** Exactly one of these: the link's token hash, or (email-bound invitations only) the invitation id from the signed-in page. */
+    tokenHash?: string;
+    invitationId?: string;
+    userId: string;
+    /** Shown to the owner in "… joined the trip". From the verified session. */
+    userName?: string;
+    verifiedEmail: string | null;
+    emailUnverified: boolean;
+  },
 ): Promise<AcceptResult> {
   return db.transaction(async (tx): Promise<AcceptResult> => {
     const [found] = await tx
       .select({ inv: tripInvitations, expired: sql<boolean>`${tripInvitations.expires_at} <= now()` })
       .from(tripInvitations)
-      .where(eq(tripInvitations.token_hash, input.tokenHash))
+      .where(input.invitationId ? eq(tripInvitations.id, input.invitationId) : eq(tripInvitations.token_hash, input.tokenHash ?? ""))
       .for("update");
     if (!found) return { status: "invalid" };
     const { inv, expired } = found;
+    // An id is not a secret: it may only ever accept an invitation that is bound to the verified email below.
+    if (input.invitationId && !inv.email) return { status: "invalid" };
 
     if (inv.accepted_at) {
       return inv.accepted_by === input.userId
@@ -539,7 +570,7 @@ export async function acceptInvitation(
 
     // The trip must still exist under the same owner (cascade removes invitations with it).
     const [trip] = await tx
-      .select({ id: trips.id })
+      .select({ id: trips.id, title: trips.title })
       .from(trips)
       .where(and(eq(trips.id, inv.trip_id), eq(trips.owner_id, inv.owner_id)))
       .for("share");
@@ -576,6 +607,20 @@ export async function acceptInvitation(
       .update(tripInvitations)
       .set({ accepted_at: sql`now()`, accepted_by: input.userId })
       .where(eq(tripInvitations.id, inv.id));
+    // Same transaction as the membership: the owner hears about it if and only if it happened.
+    await safely(tx, "invitation_accepted", (n) =>
+      createNotifications(n, [
+        invitationAcceptedDraft({
+          ownerId: inv.owner_id,
+          tripId: inv.trip_id,
+          invitationId: inv.id,
+          acceptorId: input.userId,
+          acceptorName: input.userName ?? "",
+          tripTitle: trip.title,
+          role: inv.role as InviteRole,
+        }),
+      ]),
+    );
     return { status: "ok", tripId: inv.trip_id, role: inv.role as InviteRole };
   });
 }
@@ -612,6 +657,8 @@ const VERSIONED_TABLES = [
   "packing_items",
   "trip_memories",
   "trip_members",
+  "polls",
+  "poll_votes",
 ] as const;
 
 /**

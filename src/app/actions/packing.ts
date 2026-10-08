@@ -8,6 +8,7 @@ import {
   createPackingItemForUser,
   deletePackingCategoryForUser,
   deletePackingItemForUser,
+  importBabyPackingForUser,
   movePackingItemForUser,
   reorderPackingCategoriesForUser,
   reorderPackingItemsForUser,
@@ -18,6 +19,7 @@ import {
   type PackingCategoryDeleteChoice,
 } from "@/lib/dal";
 import {
+  babyImportSchema,
   deletePackingCategorySchema,
   expectedUpdatedAtSchema,
   formFields,
@@ -31,7 +33,7 @@ import {
 import type { ActionState } from "@/lib/types";
 import { conflictState, guarded, invalid, notFound } from "./shared";
 
-const ITEM_FIELDS = ["category_id", "label", "quantity", "traveler_name", "notes"] as const;
+const ITEM_FIELDS = ["category_id", "label", "quantity", "traveler_name", "notes", "assignee_id", "due_date", "due_time"] as const;
 
 const refresh = (tripId: string) => revalidatePath(`/trips/${tripId}`, "layout");
 
@@ -149,6 +151,13 @@ export async function savePackingItem(
         fieldErrors: { category_id: ["Choose a category from this trip."] },
       };
     }
+    if (outcome.reason === "assignee_not_member") {
+      return {
+        ok: false,
+        message: "Please check the highlighted fields.",
+        fieldErrors: { assignee_id: ["Choose someone who is on this trip."] },
+      };
+    }
     return notFound(itemId ? "Item" : "Trip");
   });
 
@@ -263,6 +272,30 @@ export async function copyPackingFromTrip(
       return { ok: false, message: "That trip’s list isn’t available. Choose one of your other trips." };
     }
     return notFound("Trip");
+  });
+  if (result.ok) refresh(tripId);
+  return result;
+}
+
+/**
+ * Import Arjun's packing list. The browser only names the keys it accepted
+ * (quantity changes, "add anyway"); what exists and what is new is decided
+ * again on the server, inside one transaction, for a trip the caller can edit.
+ */
+export async function importBabyPacking(
+  tripId: string,
+  input: { quantities: string[]; addAnyway: string[] },
+): Promise<ActionState> {
+  const parsed = babyImportSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const result = await guarded("importBabyPacking", async () => {
+    const outcome = await importBabyPackingForUser(tripId, parsed.data);
+    if (!outcome.ok) return notFound("Trip");
+    const { added, matched, updated, skipped } = outcome;
+    return {
+      ok: true,
+      message: `Added ${plural(added, "item")}, ${matched} already on your list, ${updated} updated, ${skipped} left for review.`,
+    };
   });
   if (result.ok) refresh(tripId);
   return result;

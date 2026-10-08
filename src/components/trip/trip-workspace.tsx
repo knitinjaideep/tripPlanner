@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteReservation } from "@/app/actions/reservations";
@@ -14,9 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { secondaryButtonClass } from "@/components/forms/fields";
+import { ReminderButton } from "@/components/reminders/reminders-provider";
 import { Attribution, useTripAccess } from "./trip-access";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, stayNights } from "@/lib/booking-format";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import { readDetails } from "@/lib/reservation-details";
 import type { Reservation, ReservationKind, TripDocument } from "@/lib/types";
 import { BookingForm } from "./booking-form";
@@ -77,6 +80,15 @@ export function TripWorkspace({
   >(null);
 
   const activeBooking = sheet.open && sheet.mode !== "create" ? bookings.find((b) => b.id === sheet.bookingId) : undefined;
+
+  // A reminder's link (?booking=…) opens that booking, showing its CURRENT details. Opening changes nothing.
+  const bookingParam = useSearchParams().get("booking");
+  const openedFromLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!bookingParam || openedFromLink.current === bookingParam || !/^[0-9a-f-]{36}$/i.test(bookingParam)) return;
+    openedFromLink.current = bookingParam;
+    setSheet({ open: true, mode: "view", bookingId: bookingParam });
+  }, [bookingParam]);
 
   const workspace: Workspace = {
     tripId,
@@ -234,9 +246,10 @@ function BookingDetails({
   onDelete: () => void;
   onAddDocument: () => void;
 }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const meta = BOOKING_KIND_META[b.kind];
-  const start = formatMoment(b.start_date, b.start_time, false, b.start_time_zone);
-  const end = formatMoment(b.end_date, b.end_time, false, b.end_time_zone);
+  const start = formatMoment(b.start_date, b.start_time, false, b.start_time_zone, clockPref);
+  const end = formatMoment(b.end_date, b.end_time, false, b.end_time_zone, clockPref);
   const nights = stayNights(b);
   const { canEdit } = useTripAccess();
 
@@ -298,6 +311,13 @@ function BookingDetails({
             <p className="mt-1.5 text-[0.9375rem] leading-relaxed whitespace-pre-line text-muted-foreground">{b.notes}</p>
           </section>
         ) : null}
+
+        <section aria-label="Reminder" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            {b.status === "cancelled" ? "A cancelled booking has no reminders." : "Get a heads-up before this starts — only for the people you choose."}
+          </p>
+          <ReminderButton type="booking" id={b.id} />
+        </section>
 
         <section className="rounded-2xl bg-surface-warm p-4">
           <div className="flex items-center justify-between gap-3">

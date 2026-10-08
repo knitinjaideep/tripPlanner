@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAuth, NEON_AUTH_COOKIE_PREFIX } from "@/lib/auth/server";
 import { INVITE_COOKIE, TOKEN_PATTERN } from "@/lib/sharing";
+import { idSchema } from "@/lib/validation";
 
 /**
  * Ends the session at Neon Auth (which revokes it server-side), then clears
@@ -40,6 +41,17 @@ export async function switchAccountForInvite(token: string) {
   await signOutQuietly();
   (await cookies()).set(INVITE_COOKIE, token, { path: "/", maxAge: 30 * 60, secure: true, httpOnly: true, sameSite: "lax" });
   redirect("/login?next=%2Finvite");
+}
+
+/**
+ * "Use a different account" on an invitation opened from the inbox. The
+ * invitation id is not a secret, so it simply rides in the (validated)
+ * return path.
+ */
+export async function switchAccountForInvitation(invitationId: string) {
+  if (!idSchema.safeParse(invitationId).success) redirect("/trips");
+  await signOutQuietly();
+  redirect(`/login?next=${encodeURIComponent(`/invitations/${invitationId}`)}`);
 }
 
 async function signOutQuietly() {

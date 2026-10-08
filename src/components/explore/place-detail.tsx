@@ -38,6 +38,7 @@ import { StarRatingInput, Stars } from "@/components/itinerary/star-rating";
 import type { TripDayOption } from "@/components/itinerary/types";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatShortDay, formatTime, parseDate } from "@/lib/dates";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import { formatRating, mapsLink } from "@/lib/explore";
 import { itineraryHref } from "@/lib/itinerary-format";
 import { addMinutesToTime, checkOuting, type OutingNotice } from "@/lib/outing-check";
@@ -57,7 +58,9 @@ import {
   type Recommendation,
 } from "@/lib/recommendations";
 import type { ActionState, ItineraryEntry, PlaceWithVisits, Reservation } from "@/lib/types";
+import { PollsNearby } from "@/components/polls/polls-view";
 import { Attribution, useTripAccess } from "@/components/trip/trip-access";
+import type { PollView } from "@/lib/polls";
 import { cn } from "@/lib/utils";
 import { useExplore } from "./explore-workspace";
 import { FavoriteButton } from "./favorite-button";
@@ -75,6 +78,9 @@ type Props = {
   /** Sensible default day: today in the trip's zone, clamped into the trip. */
   defaultDate: string;
   initialAction: DetailAction;
+  /** Questions asked about this place. */
+  polls: PollView[];
+  pollPlaces: { id: string; name: string }[];
   closeHref: string;
   trip: TripContext;
   /** Every itinerary entry of the trip, for conflict checks. */
@@ -116,7 +122,8 @@ const hostOf = (url: string) => {
 
 type ScheduleSeed = { start: string; end: string } | null;
 
-function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, items, reservations }: Props) {
+function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, items, reservations, polls, pollPlaces }: Props) {
+  const { clock: clockPref } = useDisplayPrefs();
   const { tripId, editPlace, removePlace } = useExplore();
   const { canEdit } = useTripAccess();
   const [action, setAction] = useState<DetailAction>(initialAction);
@@ -252,6 +259,17 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
         {rec && (rec.price || rec.priceNote) ? <PriceCard rec={rec} /> : null}
         {rec ? <RecommendationNotes rec={rec} /> : null}
 
+        <PollsNearby
+          tripId={tripId}
+          tripTimeZone={trip.timeZone}
+          polls={polls.filter((p) => p.status !== "canceled")}
+          places={pollPlaces}
+          heading="Ask the group about this place"
+          parent={{ type: "place", place_id: place.id }}
+          scopeLabel={`About ${place.name}`}
+          seedPlaceId={place.id}
+        />
+
         <NotesForm key={place.my_notes ?? ""} tripId={tripId} place={place} />
 
         <section aria-labelledby="planned-heading">
@@ -267,7 +285,7 @@ function PlaceDetail({ place, visits, days, defaultDate, initialAction, trip, it
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-ink">
                       {dayLabel(days, v.local_date)}
-                      {v.local_start_time ? <span className="font-normal text-muted-foreground"> · {formatTime(v.local_start_time)}</span> : null}
+                      {v.local_start_time ? <span className="font-normal text-muted-foreground"> · {formatTime(v.local_start_time, clockPref)}</span> : null}
                     </p>
                     {v.local_date ? (
                       <Link
@@ -414,6 +432,7 @@ function RecommendationNotes({ rec }: { rec: Recommendation }) {
 }
 
 function TakeTurnsCard({ turns, onUse }: { turns: NonNullable<Recommendation["turns"]>; onUse: () => void }) {
+  const { clock: clockPref } = useDisplayPrefs();
   return (
     <section aria-labelledby="turns-heading" className="rounded-2xl border border-sage/60 bg-moss-soft/50 p-4">
       <h3 id="turns-heading" className="flex items-center gap-2 font-semibold text-ink">
@@ -425,8 +444,8 @@ function TakeTurnsCard({ turns, onUse }: { turns: NonNullable<Recommendation["tu
           <li key={s.at} className="flex gap-3">
             <span className="w-32 shrink-0 font-semibold text-moss-ink tabular-nums">
               {s.approx ? "Around " : ""}
-              {formatTime(s.at)}
-              {s.until ? `–${formatTime(s.until)}` : ""}
+              {formatTime(s.at, clockPref)}
+              {s.until ? `–${formatTime(s.until, clockPref)}` : ""}
             </span>
             <span className="text-ink">{s.label}</span>
           </li>
@@ -601,6 +620,7 @@ function ScheduleForm({
   reservations: Reservation[];
   onDone: () => void;
 }) {
+  const { clock: clockPref } = useDisplayPrefs();
   const router = useRouter();
   const [requestId] = useState(() => crypto.randomUUID());
   const [date, setDate] = useState(defaultDate);
@@ -633,7 +653,7 @@ function ScheduleForm({
       drive: rec?.totalAwayMinutes ? null : (rec?.driveMinutes ?? null),
       soloParent: rec?.soloParent ?? false,
     },
-    { tripStart: trip.start, tripEnd: trip.end, timeZone: trip.timeZone, items, reservations },
+    { tripStart: trip.start, tripEnd: trip.end, timeZone: trip.timeZone, items, reservations, clock: clockPref },
   );
   const needsKeep = notices.some((n) => n.confirm);
 

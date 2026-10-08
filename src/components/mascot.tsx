@@ -43,7 +43,7 @@ export function MascotImage({
 }) {
   const s = SIZES[size];
   return (
-    <span className={cn("relative inline-grid shrink-0 place-items-center", s.box, className)}>
+    <span data-atlas-mascot="" className={cn("relative inline-grid shrink-0 place-items-center", s.box, className)}>
       {variant === "glow" ? (
         <span
           aria-hidden="true"

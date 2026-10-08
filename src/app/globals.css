@@ -171,6 +171,59 @@
   }
 }
 
+/*
+ * Appearance (Settings → Appearance). One decorative layer behind the whole
+ * signed-in app, rendered by <BackgroundLayer> from the registry in
+ * src/lib/backgrounds.ts (which supplies --bg-pos, --bg-pos-narrow, --bg-wash
+ * and the base colour inline). Paint order: ivory base → picture → ivory wash.
+ * Opacity only ever applies to the wash, never to the app. Sized to the LARGE
+ * viewport (lvh) so a phone's collapsing browser toolbar never rescales it,
+ * and not background-attachment: fixed (janky on iOS).
+ */
+.atlas-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.atlas-bg-img {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: var(--bg-pos, center bottom);
+  background-repeat: no-repeat;
+}
+@media (max-width: 639px) and (orientation: portrait) {
+  .atlas-bg-img { background-position: var(--bg-pos-narrow, 30% bottom); }
+}
+.atlas-bg-wash {
+  position: absolute;
+  inset: 0;
+  background: var(--background);
+  opacity: var(--bg-wash, 0);
+  transition: opacity 0.2s ease;
+}
+.atlas-bg-in { animation: atlas-bg-fade 0.35s ease both; }
+@keyframes atlas-bg-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .atlas-bg-in { animation: none; }
+  .atlas-bg-wash { transition: none; }
+}
+@media (forced-colors: active) {
+  .atlas-bg { display: none; }
+}
+@media print {
+  .atlas-bg { display: none; }
+}
+/* The sticky header (4rem) and, while previewing, the appearance bar sit above the page: keep focused fields clear of both. */
+html { scroll-padding-top: calc(4rem + var(--atlas-bar-h, 0px) + 0.5rem); }
+
 @layer components {
   .font-display {
     font-family: var(--font-fraunces);

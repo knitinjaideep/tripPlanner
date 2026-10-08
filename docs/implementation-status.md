@@ -1,9 +1,139 @@
 # Atlas — implementation status
 
-_Last updated: 2026-10-06 (Aruba Explore recommendations: curated collection, favorites, notes, conflict checks)._
+_Last updated: 2026-10-07 (booking and task reminders; scheduler setup and migrations 0007–0010 pending on Neon)._
 
 This file is the hand-off point for later prompts: what exists, how it is
 put together, and what comes next.
+
+## Settings (2026-10-07)
+
+Personal settings at `/settings` (account menu → Settings): Appearance, Notifications, Travel preferences, Display preferences, Account. Trip details, members, invitations and protected rest stay in each trip's own settings.
+
+- **Migration `0011_user_settings`** (additive; applied only to a disposable local Postgres 17 — **not applied to Neon; run `npm run db:migrate`** after 0007–0010): `user_settings` (one row per user; jsonb column per section — appearance, notifications, travel, display — plus `display_name`). Saving a section merges into that column only (`jsonb ||`), so partial updates never touch other fields or sections. Missing / unknown stored values read as defaults. Existing `reminder_prefs` / `evening_preview_prefs` are untouched.
+- **Access:** DAL only (`getSettingsForUser`, `saveSettingsSectionForUser`, `saveDisplayNameForUser`, `getDisplayPrefsForUser`); none takes a user id. Actions in `src/app/actions/settings.ts`, strict Zod schemas in `validation.ts`, return the stored values so "Saved" is shown only from server confirmation; drafts survive failures.
+- **Appearance (global backgrounds, 2026-10-07):** one typed `Appearance` model (`src/lib/settings.ts`), one background **registry** (`src/lib/backgrounds.ts`: stable hyphenated ids, label, description, WebP url + thumbnail, base colour, wide/narrow position hints, subtle/standard ivory-wash opacity) read by Settings, the availability check and the renderer. State lives in a pure reducer (`src/lib/appearance-state.ts`, `npm run test:appearance`) run by `SettingsProvider` (mounted in `(app)/layout.tsx`, keyed by user id): `saved` (+ server `version`), `draft` (memory only, survives client navigation, dropped on refresh with a `beforeunload` warning), `effective = draft ?? saved`. Selection only edits the draft and repaints the whole app; Save sends only changed fields with the base version (`saveAppearance` action → `saveAppearanceForUser` → `UPDATE … WHERE appearance_version = $n`); a newer save from another device is a conflict (draft kept; bar offers "Save mine instead" / "Use theirs"); focus refresh adopts a newer saved appearance unless there is a draft (then it is parked). Editing is locked while a save is pending. The single global `AppearanceBar` (sticky under the header, publishes `--atlas-bar-h` for sticky offsets and `scroll-padding-top`) holds the only Save/Cancel, the "Saved" confirmation and the image-failure notice. `BackgroundLayer` (one fixed `aria-hidden`/`inert` layer, `100lvh`, no `background-attachment: fixed`) paints ivory base → picture → ivory wash; a picture is preloaded first (latest choice wins, the old one stays until the new is ready, 0.35 s crossfade off under reduced motion), a failed picture shows Plain Ivory + "couldn't load / Try again" and never touches the saved value. Only the active full picture is fetched (+ SSR `preload`); thumbnails are 480 px; hovering a choice preloads that one picture. Compact density and mascot-hide are emitted as a document-level `<style>` so portals (dialogs, drawers) follow too. **Migration `0012_appearance_version`** (additive column `user_settings.appearance_version`, not applied to Neon). Assets: the supplied JPEGs are kept untouched in `assets/backgrounds-src/`; `scripts/optimize-backgrounds.mjs` (sharp, devDependency) writes real WebP copies to `public/backgrounds/` (17–53 KB full, 2–6 KB thumb). Retired underscore ids (`forest_mist`) still read correctly.
+- **Notifications:** six switches (invitations, polls, shared changes, evening previews, booking reminders, task reminders). Gate: `createNotifications` (all types), evening-preview worker (before claiming) and reminder planning (`effectivePrefs`, which cancels / revives rows). History is never deleted; trip schedules are read-only in Settings. Turning a reminder switch on lifts the person's own "reminders off" master switch.
+- **Travel preferences:** stored only; nothing uses them yet (said in the UI).
+- **Display:** `formatTime(time, clock)` plus `src/lib/display-format.ts` (`formatDistance`, `formatMoney`). 24-hour is wired through itinerary, bookings, overview cards, packing, Explore, plan update, outing notices, memories and the evening-preview dialog. Not converted: text stored at creation (inbox notifications, emails, evening previews, polls) stays 12-hour. No numeric distances or manual money amounts exist in the app yet, so unit / currency are stored and have no visible effect; currency is never converted.
+- **Account:** Atlas-only display name (applied by `requireUser` and `upsertProfile`; Google account untouched), photo, email, provider, sign out. **No account deletion exists, so none is shown (follow-up).**
+- **Checks:** typecheck, lint, build, `db:check`; new `test:settings` 25, `test:display-format` 8 (also at two extreme `TZ`s); gate checks added to `test:reminders` 65 and `test:evening` 37; all other suites pass (`test:authz` 119).
+- **Not tested:** the screens in a browser (a dev server was already running, so no fixture was served), real sign-in, phone / iPad widths, Neon.
+
+## Booking and task reminders (2026-10-07)
+
+Reminders before a **confirmed booking** and before a **task assigned to a person** is due. Full rules, scheduler setup and where things live: **`docs/reminders.md`**.
+
+- **Delivery status: built and tested; NOT active until the scheduler is configured.** `GET|POST /api/cron/reminders` (same `CRON_SECRET`, shared check in `src/lib/cron-auth.ts`; 503 when unset) must be called about every 5 minutes (Vercel Cron on Pro, or any pinger; `vercel.json` deliberately not added). The reminder dialogs show a yellow "isn't running yet" note until `scheduler_heartbeats` (job `reminders`) shows a run within 20 minutes. No SMS / push.
+- **Migration `0010_reminders`** (additive; applied only to a disposable local Postgres 17 — **not applied to Neon; run `npm run db:migrate`**, after 0007–0009): `packing_items` + `assignee_id`, `due_date`, `due_time`, `due_time_zone` (+ `unique(id, trip_id)`, checks); `reminder_prefs` (per user: enabled default **true**, inbox default true, **email default false**, quiet hours, default task time of day); `reminders` (one row per booking-or-task × recipient: rule, current `occurrence`, status, `target_at`, `fire_at`, `expires_at`, claim token / lease, per-channel delivery state; composite FKs to the trip, the booking and the task, so a reminder can never point across trips; cascade on delete); a hand-written trigger that marks an already-sent inbox item "canceled" when its reminder is deleted.
+- **Reused:** the notification inbox (`reminder` type enabled in the registry, destinations `…/bookings?booking=<id>` and `…/packing?task=<id>` added to the strict allow-list), the cron / heartbeat / lease / idempotency-key pattern and Resend configuration of the evening preview. **Did not exist, added:** task assignment + due date/time, per-person reminder settings with quiet hours (evening-preview prefs are per trip, without quiet hours). Bookings have no participants field, so the person setting a reminder up always chooses recipients. There is no stored "time to leave", so no leave-by reminder was built.
+- **Setup flow:** bookings page / packing page → "Set up reminders" (review list of what *could* have one; reads only; nothing is ever created implicitly) → per-record control (booking details, bell on a task row, or "Manage reminders" in an inbox item): presets (booking: 24 h / 2 h / custom / off; task: at due time / 1 day before / custom / off), recipients (booking: ticked members, none preselected; task: the assignee only), a server-computed preview per person in the right zone ("Remind Pavani on October 16 at 11:00 AM, Aruba time."), a mandatory time of day for date-only tasks (the person's default is offered, never applied silently). Owners / editors set up; each recipient snoozes / turns off their own and owns "Your reminder settings".
+- **Cancellation / rescheduling:** one function (`reconcileRow`) recomputes what should happen from the live record, called in the same transaction as every relevant write (booking edit / status / zone, task edit / assign / complete, trip zone change, member removal, a person's own settings) and again inside the delivery transaction. Time change → new fire time (new `occurrence` and the old inbox item marked **Updated** if already sent); cancelled / no start time / completed / no due date / unassigned / reassigned / removed member / recipient off → canceled (with the reason; sent items marked Canceled / Completed); un-cancel, un-complete, due date back, reminders back on → revived if still ahead. Reassignment moves the rule to the new assignee only if the task already had a reminder. Deleting a booking, task or trip deletes its reminders. Delivery refuses when stored `target_at` ≠ the live time (stale-job protection), when the booking has started, or outside the freshness window (booking 30 min and never past the start; task 2 h / end of a date-only task's due date) — after downtime nothing old is sent.
+- **Quiet hours:** booking → moved earlier (≤ 3 h, still ahead) and said so, else not sent unless the recipient chooses "Send it anyway"; task → held until quiet hours end if still before due, else the same choice; a snooze is never moved.
+- **Checks:** typecheck, lint, build, `db:check`; new `test:reminder-logic` 24 (no DB; also at `TZ=Pacific/Kiritimati`, `Pacific/Pago_Pago`) and `test:reminders` 63 (eligibility, recipients, flight zones, date-only tasks, delivery / duplicates / six concurrent workers, reschedule / cancel / reassign / complete / delete, member removal incl. behind-the-back, preferences, quiet hours, freshness and downtime, stale job and claim races, retries and give-up, email with a **mock** provider incl. failure / retry / email-only / withdrawal, snooze persistence and limits, authorization of recipient actions, inbox actions by role, directions only from an existing link, trip zone change); all earlier suites pass (`test:authz` 119 with the new cron route and DAL entry point in its guards, a client-component guard that caught a type import and was fixed). The real route was exercised over HTTP against the disposable database (503 unconfigured, 401 wrong / missing, 200 with counts, dry run, bad `at`).
+- **Not tested:** the screens in a browser (no sign-in is possible here: they were typechecked, linted and built, but not exercised at phone / iPad widths — do that before relying on them), a real Resend send, a real cron run, the live Neon database, real second accounts.
+- **Limitations:** quiet hours are one window per person; the "earlier" move is capped at 3 h; reminders are per recipient (editing the rule for a booking re-applies it to the chosen people); an inbox item's Snooze options are those offered when the inbox was read; the freshness windows are constants (`src/lib/reminders.ts`), not settings; no "time to leave" reminder; bookings without a start time cannot be reminded.
+
+## Evening preview of tomorrow (2026-10-07)
+
+An optional, per-person, per-trip preview in the inbox (and email if configured). Full setup in **`docs/evening-preview.md`**.
+
+- **Delivery status: built and tested; NOT active until the scheduler is configured.** The repo had no job infrastructure (Vercel + Neon, no `vercel.json`). The worker is `runEveningPreviews` (`src/db/evening-preview.ts`), triggered by `GET|POST /api/cron/evening-preview` (secret `CRON_SECRET`, constant-time bearer check, 503 when unset, bypasses the sign-in proxy). Needs `CRON_SECRET` + a caller every 15 min (Vercel Cron on Pro, or any external pinger; Hobby only allows daily crons, so `vercel.json` was deliberately not added). The settings dialog shows a yellow "isn't running yet" note until `scheduler_heartbeats` shows a run within 2 h.
+- **Migration `0009_evening_preview`** (additive; applied only to a disposable local Postgres 17 — **not applied to Neon; run `npm run db:migrate`**): `evening_preview_prefs` (per trip + user: enabled default **false**, `send_time` default 19:00 limited to 16:00–22:00, `in_app`, `email`; ≥ 1 channel; deleted with membership), `evening_preview_deliveries` (ledger, unique `(trip, user, target_date, channel)`, status / attempts / lease; no content), `scheduler_heartbeats`.
+- **Rules:** tomorrow = trip-local date + 1 (pure date arithmetic, DST-safe); only if tomorrow is a trip day (includes the evening before day one, nothing after the last day); due from the chosen time for 3 h, later = recorded `skipped/stale` and never sent; no backlog after outages; membership and preference re-checked at delivery; in-app = ledger row + notification in one transaction (exactly once, also under 6 concurrent workers); email = leased claim, `Idempotency-Key`, ≤ 3 attempts within the window, at-least-once with provider dedup only. Reuses Resend / `APP_ORIGIN` / `INVITE_EMAIL_FROM`; email control is disabled with an honest reason when the provider or an address is missing. No push, no new provider.
+- **Content** (`src/lib/evening-preview.ts`, deterministic, saved data only): up to 3 highlights in day order (meals / rest blocks count, skipped and cancelled left out, flights / check-ins labelled), first start time, trip-zone times, "As of …" snapshot time, or "Tomorrow is open. Keep it flexible or choose something from Explore." One poll: (1) open, unanswered by the recipient, attached to tomorrow (its day or one of its activities) → link to tomorrow's plan (the poll sits beside it); (2) else unanswered, closing within ~36 h and before the activity / day / planned place visit it is about → link to the poll; (3) else none. Never mentions votes or a leader. No addresses, booking numbers, document links, notes or tokens.
+- **UI:** "Evening preview" button in the trip header (any member): sample from the current plan before enabling, opt-in checkbox, time (suggested 7:00 PM, trip zone shown), inbox / email, scheduler honesty note, "Turn off previews"; emails link to it (`?evening=1`). Notification type `evening_preview` is now enabled.
+- **Checks:** typecheck, lint, build, `db:check`; new `test:evening` 36 (schedule at date boundaries / DST NY & London / Kiritimati / Pago Pago, opt-in / out, removed members, duplicate + concurrent workers, stale + no backlog, snapshot not resent, empty day, privacy, poll selection incl. answered / closed / canceled / expired / decided / not asked, email unavailable / failing / retry / lease expiry / withdrawn, dry run, scheduler status); all earlier suites pass (`test:authz` guards extended for the cron route and the session-less scheduler entry point). Not tested: a real Resend send, a real cron run, real sign-in, WebKit / a physical iPad. The dialog was checked in headless Chromium (temporary fixture, since deleted) at 390 / 820 / 1440 px: off by default, sample first, honest notes, saves once.
+
+## Ask the group — polls (2026-10-07)
+
+Small group decisions on top of shared trips and the notification service.
+
+- **Migration `0008_polls`** (additive; applied only to a disposable local Postgres 17 — **not yet applied to Neon; run `npm run db:migrate` after `0007`**). Tables `polls` (trip + owner composite FK, creator, question ≤140, description ≤500, parent `trip|day|activity|place` with composite same-trip FKs that `SET NULL` the link — hand-edited column-list form, Postgres 15+ — status `open|closed|canceled`, `closes_at`, `any_option`, the organizer's `result_option_id` + `result_tally` snapshot, `replaces_poll_id`), `poll_options` (stable ids, 1–3, label snapshot, optional same-trip `place_id`), `poll_participants` (explicit asked people), `poll_votes` (PK `(poll_id, user_id)` = one response per person; `option_id` null = "Any works for me"). Also `UNIQUE (id, trip_id)` on `itinerary_items`. Poll tables are in the live-refresh fingerprint.
+- **Permissions:** new capability `participate` (owner, editor, **viewer**) — the only write a viewer has; it never reaches the itinerary (`contribute` still gates that; test-sharing now asserts the exception explicitly). Create / edit: owners + editors. Close, cancel, choose the final answer, revise: the asker or the trip owner. Apply a result to the itinerary: owners + editors (the existing Add-to-itinerary flow). Everything is checked in the data layer inside the write transaction (`participateTrip` in the DAL).
+- **Behaviour:** the deadline is typed in the TRIP's zone, stored as an instant, and enforced against the database clock inside the vote transaction (works with no job). Votes upsert on the primary key (concurrent requests → one row). "Any works for me" is an abstention (separate count, never a vote for an option). Ties stay ties; leaders are labelled "not final". The organizer's choice is its own column, closes the poll, snapshots the totals and notifies; nothing is added to the itinerary. Content can change only while nobody has answered; afterwards "Create a revised poll" cancels the original and links the new one. Departed members: cannot vote (write gate), history kept, excluded from live totals, never notified, and a decided result's snapshot is never rewritten. Votes and who voted are visible to the whole group (stated in the UI).
+- **Notifications:** `poll_vote_needed` (asked members, not the creator, when a poll opens or someone is added by an edit) and new `poll_result` (asked members when the organizer decides); no notification per vote; deduped by `poll_vote_needed:<id>` / `poll_result:<id>`; the service refuses former members. Destination `/trips/<id>/polls?poll=<id>` (added to the strict allow-list). Evening previews / reminders are still reserved.
+- **UI:** `PollCard` (radio group, totals, voters, participant dots, organizer actions), `PollFormDialog` (question, details, 2–3 options as text or Explore places of the trip, "Any works for me", optional deadline with the trip zone shown, participant checklist), `PollsNearby` on the itinerary day (day polls + polls about that day's activities, "Ask the group" button, and "Ask the group" in an activity's menu) and in the Explore place detail, and a trip-level list at `/trips/[id]/polls` (tab "Ask the group", under More on phones). **There was no existing member picker** (only the share dialog's member list), so the participant checklist is new; it only lists current members and never adds anyone.
+- **Applying a result:** an Explore option links to `/trips/<id>/explore?place=<id>&action=schedule&day=<day>` — the existing Add-to-itinerary form with the place and day prefilled (conflict / protected-rest checks unchanged, creates a planned activity). If the place already has a planned/completed visit the card links to it instead. Text results show a summary only. Nothing is applied automatically.
+- **Checks:** typecheck, lint, build, `db:check`; new `test:polls` 26 (roles, membership, concurrency, deadline, vote change, abstention / tie, departed members, cross-trip rejection incl. DB-level FKs, no auto-scheduling, duplicate-safe apply, notifications, revisions); `test:notifications` 36, `test:notification-format` 23, `test:authz` 119, `test:sharing` 37 and the rest pass. Browser (headless Chromium, temporary fixture, mocked actions; deleted): 17 checks at 390 / 820 / 1440 px — radio-group semantics and arrow keys, viewer vs organizer controls, deadline-ended state, dialog fit, no overflow, no console errors.
+- **Limitations:** the wording of notifications and cards was not tested signed in, with real accounts, or on WebKit / a physical iPad; poll text is user-written (cleaned in notifications, shown as plain text in cards); no scheduled follow-ups (the evening preview should surface open polls); no reminders for non-voters; participants are fixed at creation (an edit before the first vote can add people; people who join later are not asked); bulk "Create a revised poll" copies content only via the form; a poll about a removed place/activity keeps its wording but loses the link.
+
+## Notification inbox (2026-10-07)
+
+A personal inbox (bell + panel + `/notifications`) and one server-side service
+every later feature creates notifications through.
+
+- **What exists to notify about:** trips are shared (owner / editors / viewers), invitations are
+  email-bound or single-use links, the itinerary is edited by several people. Polls, evening previews
+  and reminders do **not** exist yet — they are reserved types the service refuses to create.
+- **Schema — migration `0007_notifications` (additive; applied only to a disposable local Postgres 17 —
+  NOT yet applied to Neon, run `npm run db:migrate`):** table `notifications` — `recipient_id`,
+  optional `trip_id` + `trip_owner_id` (composite FK to `trips(id, owner_id)` ON DELETE CASCADE, the usual
+  pattern, so deleting a trip deletes its notifications), `type`, `title` (≤120), `body` (≤400),
+  `resource_type` / `resource_id` (uuid), `actor_id`, `dedupe_key`, `metadata` jsonb (object, ≤1 KB),
+  `created_at`, `read_at`, `archived_at`. `UNIQUE (recipient_id, dedupe_key)`; CHECKs for the type shape,
+  lengths, "actor ≠ recipient", and trip/owner pairing. Indexes: recipient + newest, partial unread,
+  trip + recipient. **There is no URL column** — destinations are derived (below). Existing data untouched.
+- **Service — `src/db/notifications.ts` (DAL-only, like `sharing.ts`) + pure `src/lib/notifications.ts`:**
+  `createNotifications(db, drafts)` is the only way a row is written. Drafts are typed
+  (`NotificationDraft`), built on the server from verified state, and checked again at write time: type
+  must be `enabled` in `NOTIFICATION_KINDS`; recipient ≠ actor; recipient must currently own / belong to the
+  trip (invitation types: an open, unexpired invitation to that trip); text goes through `cleanText`
+  (one line, URLs → "a link", token-like strings → "…", control / bidi characters removed);
+  `ON CONFLICT (recipient, dedupe_key) DO NOTHING`. Event helpers run in the caller's transaction inside
+  a savepoint (`safely`): a rollback removes the notification; a notification bug is logged and never undoes
+  or blocks the edit.
+- **Events:** (1) **invitation created** (email-bound): existing account (matched on `user_profiles.email`)
+  is notified at once; people without an account are picked up by `reconcileInvitationNotifications`, run
+  for the *verified* email whenever the inbox / bell is read (layout, poll, `/notifications`). Never accepts
+  anything. (2) **invitation accepted** → the trip owner, inside the accepting transaction. (3) **itinerary**
+  (`withItineraryAnnouncement`, wrapped around create / update / delete / move / duplicate in the DAL): added,
+  removed, rescheduled (date, start, end), or place changed → every other current member, never the actor.
+  Text e.g. "Dinner moved from 6:00 PM to 6:30 PM. — Sam", formatted in the **trip's** zone (entries stored in
+  another zone are converted for display only). Not announced: notes, renames, status / favorite / reorder,
+  booking-backed rows (their data is a booking's), "Capture a moment" entries, and bulk plan applies /
+  collection imports. Place **names** only, never addresses; booking references / documents / tokens are
+  never read into text.
+- **Reads / mutations:** every query is constrained by `recipient_id` and re-checks access at read time
+  (member of the trip, or an open invitation to the viewer's **verified** email). Lost access → the item
+  becomes "No longer available" (title/body replaced, no link, not counted as unread) — nothing old leaks.
+  Removing / leaving a trip also deletes that person's notifications for it. Unread state is per
+  recipient. `GET /api/notifications?filter=&cursor=` (keyset paging, 20 per page) and
+  `GET /api/notifications/summary` (`{unread, latest}`) read the session user's own rows; actions
+  `openNotification` / `markNotificationRead` / `markAllNotificationsRead(upTo)` (Zod ids, `guarded()`) take
+  an id only — **never a recipient or a URL**. "Mark all" only covers items up to the newest one the person
+  saw. Opening the inbox marks nothing; opening an item marks just that item.
+- **Destinations:** derived from (type, trip, resource, metadata) by the registry, then checked against a
+  strict allow-list (`isSafeInternalPath`: `/trips/<uuid>[/tab][?day=YYYY-MM-DD]`, `/invitations/<uuid>`,
+  `/notifications`). Tampered metadata falls back to the trip's itinerary.
+- **Invitation page for signed-in invitees:** `/invitations/[invitationId]` (same view as `/invite/[token]`,
+  addressed by id so the raw token never enters the inbox). Shown only to the verified invited email (or
+  someone already on the trip); any other id looks unknown. "Accept invitation" is still an explicit click
+  and `acceptInvitation` still requires the verified-email match; **by id it only works for email-bound
+  invitations** (an id is not a secret, so link invitations still need their token).
+- **UI:** `NotificationBell` in the header (gold count badge, `aria-label` with the count; ≥ `md`: popover
+  panel, < `md` incl. narrow Split View: a link to the full-screen `/notifications` route — both in the
+  markup, CSS picks). `NotificationList` (All / Unread, Today / Yesterday / Earlier in the viewer's zone —
+  `rove-tz` cookie → browser zone → UTC, per-item "Mark as read", Mark all as read, "Show earlier",
+  mascot empty state on the page / icon in the panel, error + retry, offline notice). `NotificationsProvider`
+  polls the summary every 60 s **only while the tab is visible**, immediately on focus / visibility /
+  online, and stops when signed out; open lists merge-refresh when it changes. No WebSocket service. 44 px
+  targets, `env(safe-area-inset-*)` padding, focus lands on the page heading, Esc returns focus to the bell.
+- **Extension points** (polls, evening previews, reminders): flip `enabled` + give `destination` on the
+  existing registry entry in `src/lib/notifications.ts`, add a draft builder next to the domain write, pick
+  a `dedupeKeys.*` key, call `createNotifications` inside the same transaction (`safely`). Icons are an
+  exhaustive `Record<NotificationType, …>` so the UI cannot forget one. Evening previews / reminders will
+  need a scheduler (cron) calling the same service — not built here. No email / push was added.
+- **Checks:** typecheck, lint, build, `db:check`; new `test:notifications` 36 (DB: isolation, personal
+  read state, dedupe incl. concurrent, recipients, removed members, rollback, savepoint isolation, invitations
+  incl. no auto-accept / by-id rules / reconcile, tampered destinations, pagination), new
+  `test:notification-format` 22 (no DB; also at `TZ=Pacific/Kiritimati` and `Pacific/Pago_Pago`),
+  `test:authz` 119 (guards extended for the inbox routes / session helper), `test:sharing` 37 and the other
+  suites unchanged and passing. Browser (headless Chromium, temporary fixture route since deleted, mocked
+  API): 24 checks at 320 / 390 / 505 / 767 / 768 / 1180 / 1440 px — bell link vs panel, tap → `/notifications`,
+  groups, filters, mark read / all, load more, unavailable item, open → navigation, Esc / focus return,
+  Tab order, no overflow, no console errors, polling pauses while hidden. **Not tested:** real Google
+  sign-in, a real second account, real email, WebKit / physical iPad (the headless WebKit build was not run
+  for this feature), the live Neon database.
 
 ## Shared trips + phone/iPad layouts (2026-10-07)
 
@@ -679,3 +809,11 @@ supported); it holds the Neon Auth user ID as text.
   in the Itinerary instead.
 - The album card shows only the link's service name — Atlas never fetches
   it, so there's no preview, photo count or access check.
+
+## Arjun's Aruba packing list (import)
+
+- **Migration `0013_baby_packing`** (additive): `packing_items.quantity_text` (exact supplied wording: ranges, units, supply instructions), `packing_items.source_key` (stable import key) + partial unique index `(trip_id, source_key)`.
+- **Data + planner:** `src/lib/baby-packing.ts` (pure). Sections are encoded in category names (`Cabin luggage — Arjun · Feeding`, `Checked luggage — Arjun · …`, `Airport / gate-check gear`, `Cabin essentials — Parents`). Key = section + category + label, so cabin and checked copies are separate rows. Matching: key → same category + label + traveler (adopts the key) → "ambiguous" if a similar item sits in another category (not added unless ticked).
+- **Action:** packing "More" menu → "Add Arjun's Aruba packing list…" (preview in `BabyImportDialog`); `importBabyPacking` (editors/owner only) re-plans on the server in one transaction. Quantity differences are never applied unless ticked; packed state, notes and assignments are never touched. Adult assignment is never set.
+- **Display:** `quantityLabel` (wording, else ×N). Editing the number clears `quantity_text`. Diaper total is derived (`diaperSummary`: 15 cabin + 30 checked = 45).
+- **Not built:** collapsible luggage sections / section-level progress (categories are still flat), luggage-bag (diaper bag / carry-on) field; bag and section notes are shown in the import preview only.

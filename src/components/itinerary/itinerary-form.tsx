@@ -19,6 +19,7 @@ import { Attribution } from "@/components/trip/trip-access";
 import { useTripWorkspace } from "@/components/trip/trip-workspace";
 import { BOOKING_KIND_META } from "@/lib/booking-kinds";
 import { formatMoment, placeSummary } from "@/lib/booking-format";
+import { useDisplayPrefs } from "@/components/settings/settings-provider";
 import { formatShortDay, toTimeInput } from "@/lib/dates";
 import { placeMapsUrl } from "@/lib/itinerary-format";
 import { ITINERARY_CATEGORIES, LABELS, exploreKindFor, type ItineraryCategory } from "@/lib/plan-options";
@@ -291,6 +292,7 @@ function PlaceFields({ item, places, errors, ...props }: FieldProps) {
 /* ------------------------------ booking ----------------------------- */
 
 function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, onCancel }: FieldProps) {
+  const { clock: clockPref } = useDisplayPrefs();
   const { editBooking } = useTripWorkspace();
   const available = linkableBookings({ bookings, linkedBookingIds, reservation });
   const undated = bookings.filter((b) => !b.start_date && b.status !== "cancelled");
@@ -340,7 +342,7 @@ function BookingFields({ item, reservation, bookings, linkedBookingIds, errors, 
               </p>
               <p className="mt-0.5 font-semibold text-ink">{booking.title}</p>
               <p className="text-sm text-muted-foreground">
-                {[formatMoment(booking.start_date, booking.start_time, true, booking.start_time_zone), placeSummary(booking)]
+                {[formatMoment(booking.start_date, booking.start_time, true, booking.start_time_zone, clockPref), placeSummary(booking)]
                   .filter(Boolean)
                   .join(" · ")}
               </p>

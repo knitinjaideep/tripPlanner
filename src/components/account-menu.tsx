@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { ChevronDown, Loader2, LogOut, Map } from "lucide-react";
+import { ChevronDown, Loader2, LogOut, Map, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +42,11 @@ export function AccountMenu({ name, email, initials, avatarUrl }: Props) {
         <DropdownMenuItem asChild className="min-h-11 rounded-lg px-2.5 text-sm">
           <Link href="/trips">
             <Map aria-hidden="true" /> My trips
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="min-h-11 rounded-lg px-2.5 text-sm">
+          <Link href="/settings">
+            <Settings aria-hidden="true" /> Settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem

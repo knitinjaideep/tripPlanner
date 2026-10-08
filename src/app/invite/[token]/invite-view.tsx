@@ -6,9 +6,9 @@ import { secondaryButtonClass } from "@/components/forms/fields";
 import { formatDateRange } from "@/lib/dates";
 import type { InvitePage } from "@/lib/invite-page";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/sharing";
-import { AcceptInvitationForm, SwitchAccountButton } from "./invite-actions";
+import { AcceptInvitationForm, SwitchAccountButton, type InviteTarget } from "./invite-actions";
 
-function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="relative isolate min-h-dvh overflow-hidden">
       <div
@@ -47,7 +47,7 @@ function Notice({ title, children, tripsLabel = "Go to my trips" }: { title: str
 }
 
 /** Renders what the invitation page decided to show. Pure: no data access, so every state can be previewed. */
-export function InviteView({ view, token }: { view: InvitePage; token: string }) {
+export function InviteView({ view, target }: { view: InvitePage; target: InviteTarget }) {
   switch (view.kind) {
     case "signed_out":
       // Normally the proxy has already sent signed-out visitors to sign in. Don't put the token in a redirect here.
@@ -130,7 +130,7 @@ export function InviteView({ view, token }: { view: InvitePage; token: string })
             </p>
             <p>Sign in with the invited Google account to accept it.</p>
           </Notice>
-          <SwitchAccountButton token={token} label="Sign in with a different account" />
+          <SwitchAccountButton target={target} label="Sign in with a different account" />
         </Shell>
       );
 
@@ -143,7 +143,7 @@ export function InviteView({ view, token }: { view: InvitePage; token: string })
               confirm that the account you’re signed in with owns that address.
             </p>
           </Notice>
-          <SwitchAccountButton token={token} label="Sign in with a different account" />
+          <SwitchAccountButton target={target} label="Sign in with a different account" />
         </Shell>
       );
 
@@ -188,12 +188,12 @@ export function InviteView({ view, token }: { view: InvitePage; token: string })
           </dl>
 
           <div className="space-y-3">
-            <AcceptInvitationForm token={token} />
+            <AcceptInvitationForm target={target} />
             <p className="flex items-start gap-2 text-sm text-muted-foreground">
               <Clock3 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               You’ll see the whole trip once you accept. Signing in alone doesn’t join you.
             </p>
-            <SwitchAccountButton token={token} label="Not you? Use a different account" />
+            <SwitchAccountButton target={target} label="Not you? Use a different account" />
           </div>
         </Shell>
       );
