@@ -57,8 +57,9 @@ export default async function TripLayout({ children, params }: LayoutProps<"/tri
       shared={share.members.length > 0}
       people={share.people}
     >
-      <TripWorkspace tripId={trip.id} tripTimeZone={trip.time_zone} bookings={trip.reservations} documents={trip.documents}>
-        <RemindersProvider tripId={trip.id} summaries={summaries}>
+      {/* RemindersProvider wraps TripWorkspace: the booking sheet it renders contains a ReminderButton. */}
+      <RemindersProvider tripId={trip.id} summaries={summaries}>
+        <TripWorkspace tripId={trip.id} tripTimeZone={trip.time_zone} bookings={trip.reservations} documents={trip.documents}>
           {version ? <TripLiveRefresh tripId={trip.id} version={version} /> : null}
           <TripHeaderSwitch
             full={<TripHero trip={trip} today={today} actions={actions} />}
@@ -69,8 +70,8 @@ export default async function TripLayout({ children, params }: LayoutProps<"/tri
             <div className="pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pt-8 md:pb-16">{children}</div>
           </div>
           <TripBottomNav tripId={trip.id} />
-        </RemindersProvider>
-      </TripWorkspace>
+        </TripWorkspace>
+      </RemindersProvider>
     </TripAccessProvider>
   );
 }
